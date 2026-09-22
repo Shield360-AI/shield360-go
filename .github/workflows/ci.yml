@@ -1,0 +1,35 @@
+name: CI
+
+# This file is generated. It lives in ThinkfleetAI/Shield360 as
+# .github/mirror-workflows/go.yml and is written here by the mirror sync, so
+# edit it there.
+#
+# There is no publish step. A Go module is released by tagging its repository
+# `vX.Y.Z`; the proxy and pkg.go.dev pick it up from there. What this workflow
+# does is prove the module compiles under its own import path, which differs
+# from the one it is written with in Shield360 — the sync rewrites it.
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test / Go
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - run: go mod download
+      - run: go build ./...
+      - run: go test ./...
