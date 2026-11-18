@@ -6,14 +6,20 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
+	"strings"
 	"sync"
 
+	"github.com/ThinkfleetAI/shield360-go/flags"
 	"github.com/ThinkfleetAI/shield360-go/helpers"
+	"github.com/ThinkfleetAI/shield360-go/rasp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/propagation"
+	sdklog "go.opentelemetry.io/otel/sdk/log"
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
@@ -27,6 +33,7 @@ var (
 	isInitialized  bool
 	tracerProvider *trace.TracerProvider
 	meterProvider  *metric.MeterProvider
+	loggerProvider *sdklog.LoggerProvider // SHIELD: application logs
 )
 
 // Init initializes the Shield360 SDK with the provided configuration.
@@ -65,8 +72,11 @@ func Init(cfg Config) error {
 	}
 	helpers.InitGlobalPricingCache(cfg.PricingEndpoint, cfg.DisablePricingFetch, customPricing)
 
-	// Propagate capture_message_content setting to helpers (inverted: disable=false means capture=true)
-	helpers.SetCaptureMessageContent(!cfg.DisableCaptureMessageContent)
+	// Content is captured only when asked for (see Config.CaptureMessageContent).
+	helpers.SetCaptureMessageContent(captureMessageContent(cfg))
+
+	// SHIELD: feature flags fall back to these settings (see Flags()).
+	flags.SetDefaults(flags.Defaults{URL: cfg.Shield360URL, APIKey: cfg.Shield360APIKey, ApplicationName: cfg.ApplicationName})
 
 	// Create resource
 	res, err := newResource(cfg)
@@ -94,15 +104,61 @@ func Init(cfg Config) error {
 		otel.SetMeterProvider(mp)
 	}
 
+	// SHIELD: the LoggerProvider for application logs, on the same endpoint,
+	// headers and resource as traces. Records are sent only once application
+	// logs are on (Config.CaptureLogs, SHIELD360_CAPTURE_LOGS or CaptureLogs()).
+	if lp, err := newLoggerProvider(res, cfg); err != nil {
+		log.Printf("shield360: application logs unavailable: %v", err)
+	} else {
+		loggerProvider = lp
+		setSDKLoggerProvider(lp)
+		if resolveCaptureLogs(cfg) {
+			enableAppLogs(lp, ResolveLogLevel(resolveLogLevel(cfg)), true)
+		}
+	}
+
 	// Set global propagator
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
 		propagation.TraceContext{},
 		propagation.Baggage{},
 	))
 
+	// SHIELD: runtime SCA — names and versions of the modules the binary
+	// runs, on unless Config.DisableRuntimePackages or
+	// SHIELD360_RUNTIME_PACKAGES=off. Started before RASP, which then leaves
+	// its own components report to it.
+	StartRuntimePackages(RuntimePackagesOptions{
+		URL:             firstNonEmpty(cfg.Shield360URL, os.Getenv("SHIELD360_URL")),
+		APIKey:          firstNonEmpty(cfg.Shield360APIKey, os.Getenv("SHIELD360_API_KEY")),
+		ApplicationName: cfg.ApplicationName,
+		Environment:     cfg.Environment,
+		SDKVersion:      Version,
+		Disabled:        cfg.DisableRuntimePackages,
+	})
+
+	// SHIELD: runtime protection (RASP); never fails Init.
+	rasp.Init(cfg.Rasp, rasp.InitContext{
+		ApplicationName: cfg.ApplicationName,
+		Environment:     cfg.Environment,
+		URL:             firstNonEmpty(cfg.Shield360URL, os.Getenv("SHIELD360_URL")),
+		APIKey:          firstNonEmpty(cfg.Shield360APIKey, os.Getenv("SHIELD360_API_KEY")),
+		SDKVersion:      Version,
+		OtlpEndpoint:    cfg.OtlpEndpoint,
+	})
+
 	// Set up shutdown function
 	globalShutdown = func(ctx context.Context) error {
+		rasp.Shutdown(ctx)    // SHIELD: send queued RASP events
+		StopRuntimePackages() // SHIELD: runtime SCA
 		var err error
+		// SHIELD: stop forwarding application logs, then send what is queued.
+		StopCapturingLogs()
+		setSDKLoggerProvider(nil)
+		if loggerProvider != nil {
+			if shutdownErr := loggerProvider.Shutdown(ctx); shutdownErr != nil {
+				err = shutdownErr
+			}
+		}
 		if tracerProvider != nil {
 			if shutdownErr := tracerProvider.Shutdown(ctx); shutdownErr != nil {
 				err = shutdownErr
@@ -147,6 +203,7 @@ func Shutdown(ctx context.Context) error {
 	globalConfig = nil
 	tracerProvider = nil
 	meterProvider = nil
+	loggerProvider = nil
 	globalShutdown = nil
 
 	log.Println("Shield360 shut down successfully")
@@ -178,10 +235,10 @@ func newResource(cfg Config) (*resource.Resource, error) {
 		),
 	}
 
-	if cfg.ServiceVersion != "" {
-		attrs = append(attrs, resource.WithAttributes(
-			semconv.ServiceVersionKey.String(cfg.ServiceVersion),
-		))
+	// service.version and vcs.* resolved from config, build info, CI and
+	// OTel env. Added after the base attributes so they win.
+	if build := resolveBuildAttributes(cfg, os.Getenv, buildRevision()); len(build) > 0 {
+		attrs = append(attrs, resource.WithAttributes(build...))
 	}
 
 	// Caller-supplied extras (e.g. `gen_ai.user.name`, `host.name`)
@@ -245,12 +302,39 @@ func newTracerProvider(res *resource.Resource, cfg Config) (*trace.TracerProvide
 		trace.WithSpanProcessor(spanProcessor),
 		trace.WithSampler(sampler),
 	}
+	if p := NewCodeLocationProcessor(cfg); p != nil {
+		tpOpts = append(tpOpts, trace.WithSpanProcessor(p))
+	}
 	if cfg.IDGenerator != nil {
 		tpOpts = append(tpOpts, trace.WithIDGenerator(cfg.IDGenerator))
 	}
 	tp := trace.NewTracerProvider(tpOpts...)
 
 	return tp, nil
+}
+
+// newLoggerProvider creates the application-logs LoggerProvider with an
+// OTLP/HTTP exporter to <endpoint>/v1/logs. The batch processor's queue is
+// bounded: when it is full, records are dropped rather than held.
+func newLoggerProvider(res *resource.Resource, cfg Config) (*sdklog.LoggerProvider, error) {
+	opts := []otlploghttp.Option{
+		otlploghttp.WithEndpointURL(signalEndpointURL(cfg.OtlpEndpoint, "logs")),
+		otlploghttp.WithTimeout(cfg.TraceExporterTimeout),
+	}
+	if len(cfg.OtlpHeaders) > 0 {
+		opts = append(opts, otlploghttp.WithHeaders(cfg.OtlpHeaders))
+	}
+	exporter, err := otlploghttp.New(context.Background(), opts...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create log exporter: %w", err)
+	}
+	var processor sdklog.Processor
+	if cfg.DisableBatch {
+		processor = sdklog.NewSimpleProcessor(exporter)
+	} else {
+		processor = sdklog.NewBatchProcessor(exporter)
+	}
+	return sdklog.NewLoggerProvider(sdklog.WithResource(res), sdklog.WithProcessor(processor)), nil
 }
 
 // newMeterProvider creates a new meter provider with OTLP exporter
@@ -280,4 +364,18 @@ func newMeterProvider(res *resource.Resource, cfg Config) (*metric.MeterProvider
 	)
 
 	return mp, nil
+}
+
+// captureMessageContent decides whether prompt/completion text is recorded:
+// off unless the config or OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT
+// asks for it, and always off with DisableCaptureMessageContent.
+func captureMessageContent(cfg Config) bool {
+	if cfg.DisableCaptureMessageContent {
+		return false
+	}
+	env := strings.ToLower(strings.TrimSpace(os.Getenv("OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT")))
+	if env == "false" {
+		return false
+	}
+	return cfg.CaptureMessageContent || env == "true"
 }

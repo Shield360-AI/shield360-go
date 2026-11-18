@@ -3,8 +3,8 @@ package helpers
 import "sync"
 
 var (
-	captureMessageContent     = true // default: capture content (matches Python SDK)
-	captureMessageContentMu   sync.RWMutex
+	captureMessageContent   = false // default: no content (matches the Python and TypeScript SDKs)
+	captureMessageContentMu sync.RWMutex
 )
 
 // SetCaptureMessageContent configures whether prompt/completion text is recorded

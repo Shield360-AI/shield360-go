@@ -23,7 +23,22 @@ const (
 	CodingAgentVendorClaudeCode = "claude-code"
 	CodingAgentVendorCursor     = "cursor"
 	CodingAgentVendorCodex      = "codex"
+	CodingAgentVendorOpenCode   = "opencode"
 	CodingAgentVendorWindsurf   = "windsurf"
+	// CodingAgentVendorCopilot is GitHub Copilot's agent: Copilot CLI, agent
+	// mode in VS Code, and the Copilot cloud (coding) agent. Which one ran is
+	// in CodingAgentClientSurface.
+	CodingAgentVendorCopilot = "copilot"
+)
+
+// Client surface: where a multi-surface vendor's agent ran. Stamped as a
+// resource attribute by the Copilot adapter.
+const (
+	CodingAgentClientSurface = "coding_agent.client.surface"
+
+	CodingAgentClientSurfaceCLI        = "cli"
+	CodingAgentClientSurfaceVSCode     = "vscode"
+	CodingAgentClientSurfaceCloudAgent = "cloud_agent"
 )
 
 // Session structure attributes.
@@ -46,8 +61,30 @@ const (
 	CodingAgentSessionToolCallCount = "coding_agent.session.tool_call_count"
 	// CodingAgentSessionSubagentCount totals child/subagent spawns.
 	CodingAgentSessionSubagentCount = "coding_agent.session.subagent_count"
-	// CodingAgentSessionCostUSD is the realized USD cost.
+	// CodingAgentSessionCostUSD is what the session's tokens would cost at
+	// list API rates, as the vendor's own transcript prices them. It is an
+	// API-equivalent figure, not a charge: see the billing attributes for
+	// whether anyone was billed.
 	CodingAgentSessionCostUSD = "coding_agent.session.cost_usd"
+
+	// How the tool was paying for usage during the session, as the tool's
+	// own configuration states it. Stamped once per session so the platform
+	// can tell a session on a seat from a session on a key without a licence
+	// matcher guessing.
+	//
+	// CodingAgentBillingMode is "subscription" or "api_key"; absent when the
+	// tool's config said nothing.
+	CodingAgentBillingMode = "coding_agent.billing.mode"
+	// CodingAgentBillingPlan is the plan as the vendor names it: claude_max,
+	// chatgpt, cursor.
+	CodingAgentBillingPlan = "coding_agent.billing.plan"
+	// CodingAgentBillingOverageEnabled is "true" when usage past the plan can
+	// reach a bill, "false" when the account is rate-limited instead.
+	CodingAgentBillingOverageEnabled = "coding_agent.billing.overage_enabled"
+	// CodingAgentOSUser is the machine account the session ran as. It is the
+	// identity subscription seats are kept by, which the email-shaped
+	// gen_ai.user.name is not.
+	CodingAgentOSUser = "coding_agent.os_user"
 
 	// Per-session code-change rollups stamped on the
 	// `coding_agent.session` root span at SessionEnd. They aggregate
@@ -111,6 +148,20 @@ const (
 	CodingAgentLinkageConfidenceLow    = "low"
 )
 
+// LLM turn attributes.
+const (
+	// CodingAgentLLMTurnKind describes the primary payload carried by an
+	// individual coding-agent LLM turn.
+	CodingAgentLLMTurnKind = "coding_agent.llm.turn.kind"
+)
+
+// LLM turn kind values.
+const (
+	CodingAgentLLMTurnKindPrompt   = "prompt"
+	CodingAgentLLMTurnKindResponse = "response"
+	CodingAgentLLMTurnKindThought  = "thought"
+)
+
 // Edit decision attributes — captured per file/edit so dashboards can
 // distinguish auto-applied agent edits from user-reviewed ones.
 // OTel has no standard for this; this is the major gap we fill.
@@ -129,7 +180,28 @@ const (
 	// CodingAgentEditToolName is the tool that produced the edit
 	// (e.g. "Edit", "Write", "Apply Patch").
 	CodingAgentEditToolName = "coding_agent.edit.tool.name"
+	// CodingAgentEditLineFingerprints is the list of fingerprints of the
+	// lines the agent added in this edit: one short hash per distinct
+	// non-trivial line, never the line itself. The platform matches
+	// them against later commits to see which agent-written lines a
+	// person changed, without the content ever leaving the machine.
+	// Stamped under `metadata_only` and `full` capture.
+	CodingAgentEditLineFingerprints = "coding_agent.edit.line.fingerprints"
+	// CodingAgentEditFingerprintAlgo names how the fingerprints were
+	// computed so the platform can recompute them from repository
+	// content. See CodingAgentEditFingerprintAlgoV1.
+	CodingAgentEditFingerprintAlgo = "coding_agent.edit.fingerprint.algo"
+	// CodingAgentEditFingerprintCount is how many distinct added lines
+	// were fingerprinted (may be lower than lines.added: trivial lines
+	// are skipped and the list is capped).
+	CodingAgentEditFingerprintCount = "coding_agent.edit.fingerprint.count"
 )
+
+// CodingAgentEditFingerprintAlgoV1: trim the line, collapse internal
+// whitespace runs to one space, skip lines shorter than 8 characters or
+// made only of punctuation, SHA-256 the result and keep the first 16
+// hex characters.
+const CodingAgentEditFingerprintAlgoV1 = "sha256-16/ws/v1"
 
 const (
 	CodingAgentEditDecisionAccept       = "accept"
@@ -137,11 +209,11 @@ const (
 	CodingAgentEditDecisionModify       = "modify"
 	CodingAgentEditDecisionAutoAccepted = "auto_accepted"
 
-	CodingAgentEditDecisionSourceUserInteractive    = "user_interactive"
-	CodingAgentEditDecisionSourceUserPermanentRule  = "user_permanent_rule"
-	CodingAgentEditDecisionSourceHook               = "hook"
-	CodingAgentEditDecisionSourceConfig             = "config"
-	CodingAgentEditDecisionSourcePolicy             = "policy"
+	CodingAgentEditDecisionSourceUserInteractive   = "user_interactive"
+	CodingAgentEditDecisionSourceUserPermanentRule = "user_permanent_rule"
+	CodingAgentEditDecisionSourceHook              = "hook"
+	CodingAgentEditDecisionSourceConfig            = "config"
+	CodingAgentEditDecisionSourcePolicy            = "policy"
 )
 
 // Tool causality attributes — link tool invocations back to the model
@@ -260,11 +332,11 @@ const (
 // Span names emitted by the CLI normalizer. Keep these as constants so
 // dashboard SQL can match against a small, stable set.
 const (
-	CodingAgentSpanSession        = "coding_agent.session"
-	CodingAgentSpanToolCall       = "coding_agent.tool.call"
-	CodingAgentSpanEditDecision   = "coding_agent.edit.decision"
-	CodingAgentSpanSubagent       = "coding_agent.subagent"
-	CodingAgentSpanLLMTurn        = "coding_agent.llm.turn"
+	CodingAgentSpanSession      = "coding_agent.session"
+	CodingAgentSpanToolCall     = "coding_agent.tool.call"
+	CodingAgentSpanEditDecision = "coding_agent.edit.decision"
+	CodingAgentSpanSubagent     = "coding_agent.subagent"
+	CodingAgentSpanLLMTurn      = "coding_agent.llm.turn"
 	// CodingAgentSpanGitCommit is emitted when the agent's Bash /
 	// shell tool ran a `git commit` invocation. One span per detected
 	// commit, child of the session-root trace.
@@ -292,13 +364,18 @@ const (
 // Event names — emitted as span events for high-cardinality moments
 // where a separate span would be overkill.
 const (
-	CodingAgentEventSessionStart    = "coding_agent.session.start"
-	CodingAgentEventSessionEnd      = "coding_agent.session.end"
-	CodingAgentEventEditDecision    = "coding_agent.edit.decision"
-	CodingAgentEventLoopDetected    = "coding_agent.loop.detected"
-	CodingAgentEventSubagentSpawned = "coding_agent.subagent.spawned"
-	CodingAgentEventSubagentDone    = "coding_agent.subagent.completed"
-	CodingAgentEventMCPInvoked      = "coding_agent.mcp.tool.invoked"
+	CodingAgentEventSessionStart = "coding_agent.session.start"
+	CodingAgentEventSessionEnd   = "coding_agent.session.end"
+	// OpenCode has no terminal SessionEnd hook. Minimal capture uses
+	// non-terminal snapshots so counters stay visible without inventing
+	// a completed session root or emitting high-cardinality child spans.
+	CodingAgentEventSessionSnapshotStart = "coding_agent.session.snapshot.start"
+	CodingAgentEventSessionSnapshot      = "coding_agent.session.snapshot"
+	CodingAgentEventEditDecision         = "coding_agent.edit.decision"
+	CodingAgentEventLoopDetected         = "coding_agent.loop.detected"
+	CodingAgentEventSubagentSpawned      = "coding_agent.subagent.spawned"
+	CodingAgentEventSubagentDone         = "coding_agent.subagent.completed"
+	CodingAgentEventMCPInvoked           = "coding_agent.mcp.tool.invoked"
 )
 
 // Metric names — additions on top of gen_ai.* metrics.

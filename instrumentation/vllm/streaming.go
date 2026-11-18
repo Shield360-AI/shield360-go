@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/ThinkfleetAI/shield360-go/helpers"
+	"github.com/ThinkfleetAI/shield360-go/rasp"
 	"github.com/ThinkfleetAI/shield360-go/semconv"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -39,7 +40,8 @@ func (c *InstrumentedClient) createChatCompletionStream(ctx context.Context, req
 	}
 
 	spanName := fmt.Sprintf("%s %s", semconv.GenAIOperationTypeChat, req.Model)
-	ctx, span := tracer.Start(ctx, spanName, trace.WithSpanKind(trace.SpanKindClient))
+	ctx, span := tracer.Start(ctx, spanName, trace.WithSpanKind(trace.SpanKindClient),
+		trace.WithAttributes(attribute.String(semconv.GenAIOperationName, semconv.GenAIOperationTypeChat)))
 
 	req.Stream = true
 	if req.StreamOptions == nil {
@@ -290,6 +292,8 @@ func (c *InstrumentedClient) readStream(ctx context.Context, span trace.Span, st
 			attribute.String(semconv.GenAIRequestModel, req.Model),
 		))
 	}
+
+	rasp.RecordModelOutput(ctx, accumulatedContent, "") // SHIELD: model output is untrusted input for RASP
 
 	if helpers.GetCaptureMessageContent() && accumulatedContent != "" {
 		_ = semconv.SetMessagesAttribute(span, semconv.GenAIOutputMessages, []semconv.Message{{

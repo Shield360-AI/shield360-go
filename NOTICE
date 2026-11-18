@@ -1,0 +1,22 @@
+Shield360 Go SDK
+Copyright 2026 ThinkFleet
+
+Licensed under the Apache License, Version 2.0 (see LICENSE, or
+http://www.apache.org/licenses/LICENSE-2.0).
+
+---
+
+This product includes software developed by OpenLIT
+(https://github.com/openlit/openlit), Copyright the OpenLIT authors, licensed
+under the Apache License, Version 2.0. Portions of this software (the instrumentation and OTel setup) are
+derived from OpenLIT, forked at commit
+cc00e010c0392f0059b4892ab43e9d72f046c135 (2026-09-17), and modified by
+ThinkFleet. Modified files that came from OpenLIT keep their upstream paths;
+changes are marked with SHIELD: comments.
+
+---
+
+The runtime application self-protection (RASP) detection rules in rasp/ adapt
+algorithms from Baidu OpenRASP (https://github.com/baidu/openrasp,
+plugins/official/plugin.js), Copyright Baidu, Inc., licensed under the Apache
+License, Version 2.0.

@@ -36,7 +36,8 @@ func (c *InstrumentedClient) createMessage(ctx context.Context, req MessageReque
 		metric.WithUnit("s"))
 
 	spanName := fmt.Sprintf("%s %s", semconv.GenAIOperationTypeChat, req.Model)
-	ctx, span := tracer.Start(ctx, spanName, trace.WithSpanKind(trace.SpanKindClient))
+	ctx, span := tracer.Start(ctx, spanName, trace.WithSpanKind(trace.SpanKindClient),
+		trace.WithAttributes(attribute.String(semconv.GenAIOperationName, semconv.GenAIOperationTypeChat)))
 	defer span.End()
 
 	startTime := time.Now()
@@ -97,6 +98,7 @@ func (c *InstrumentedClient) createMessage(ctx context.Context, req MessageReque
 	duration := time.Since(startTime)
 
 	setResponseAttributes(span, &resp, req.Model, duration)
+	recordModelOutput(ctx, &resp) // SHIELD: model output is untrusted input for RASP
 
 	if resp.Usage != nil {
 		cost := helpers.CalculateGlobalCost(resp.Model, resp.Usage.InputTokens, resp.Usage.OutputTokens)

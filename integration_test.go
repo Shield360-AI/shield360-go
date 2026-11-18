@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ThinkfleetAI/shield360-go/helpers"
 	"github.com/ThinkfleetAI/shield360-go/instrumentation/anthropic"
 	"github.com/ThinkfleetAI/shield360-go/instrumentation/openai"
 )
@@ -59,9 +60,26 @@ func TestSDKDefaultCaptureMessageContent(t *testing.T) {
 	defer Shutdown(context.Background()) //nolint:errcheck
 
 	cfg := GetConfig()
-	// DisableCaptureMessageContent defaults to false, meaning content IS captured
-	if cfg.DisableCaptureMessageContent {
-		t.Error("Expected DisableCaptureMessageContent to default to false (content capture enabled)")
+	// Content is off unless asked for.
+	if cfg.CaptureMessageContent || helpers.GetCaptureMessageContent() {
+		t.Error("Expected content capture to be off by default")
+	}
+}
+
+func TestCaptureMessageContentWhenAskedFor(t *testing.T) {
+	if !captureMessageContent(Config{CaptureMessageContent: true}) {
+		t.Error("CaptureMessageContent: true should capture")
+	}
+	if captureMessageContent(Config{CaptureMessageContent: true, DisableCaptureMessageContent: true}) {
+		t.Error("DisableCaptureMessageContent should win")
+	}
+	t.Setenv("OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT", "true")
+	if !captureMessageContent(Config{}) {
+		t.Error("the OpenTelemetry variable should turn capture on")
+	}
+	t.Setenv("OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT", "false")
+	if captureMessageContent(Config{CaptureMessageContent: true}) {
+		t.Error("the OpenTelemetry variable set to false should turn capture off")
 	}
 }
 

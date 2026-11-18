@@ -1,15 +1,20 @@
 package shield360
 
 import (
+	"os"
+	"strings"
 	"time"
 
+	"github.com/ThinkfleetAI/shield360-go/rasp"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
 // Config holds the configuration for Shield360 SDK initialization
 type Config struct {
-	// OtlpEndpoint is the OTLP endpoint for sending traces and metrics
-	// Default: "http://127.0.0.1:4318"
+	// OtlpEndpoint is the OTLP endpoint for sending traces, metrics and logs.
+	// Default: OTEL_EXPORTER_OTLP_ENDPOINT; else, with a Shield360 URL and API
+	// key, <Shield360URL>/api/ingest/otlp with the key as bearer; else
+	// "http://127.0.0.1:4318".
 	OtlpEndpoint string
 
 	// OtlpHeaders are additional headers to send with OTLP requests
@@ -22,6 +27,14 @@ type Config struct {
 	// ApplicationName is the name of your application
 	// Default: "default"
 	ApplicationName string
+
+	// SHIELD: Shield360URL is Shield360's base URL, for feature flags (Flags()) and
+	// Prompt Hub. Default: SHIELD360_URL.
+	Shield360URL string
+
+	// Shield360APIKey is the environment's API key for Shield360URL.
+	// Default: SHIELD360_API_KEY.
+	Shield360APIKey string
 
 	// TracerName is the name for the tracer provider
 	// Default: "shield360"
@@ -64,9 +77,16 @@ type Config struct {
 	// DisablePricingFetch disables automatic pricing information fetching
 	DisablePricingFetch bool
 
+	// CaptureMessageContent records prompt/completion text as span attributes.
+	// Default: false — no content is captured unless asked for, here or with
+	// OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=true (matching the
+	// Python and TypeScript SDKs). A Shield360 organisation stores content only
+	// when its Data retention setting allows it, whatever is sent.
+	CaptureMessageContent bool
+
 	// DisableCaptureMessageContent prevents prompt/completion text from being
-	// recorded as span attributes. Set to true for privacy-sensitive workloads.
-	// Default: false (content IS captured, matching Python SDK default of capture_message_content=True)
+	// recorded, and wins over CaptureMessageContent and the environment.
+	// Kept for compatibility; content is off by default.
 	DisableCaptureMessageContent bool
 
 	// DetailedTracing enables detailed component-level tracing.
@@ -93,6 +113,53 @@ type Config struct {
 	// stable identity (e.g. `gen_ai.user.name`, `host.name`) once at
 	// startup rather than tagging each span individually.
 	ExtraResourceAttributes map[string]string
+
+	// CaptureCodeLocation records the application call site on GenAI spans
+	// as code.function.name, code.file.path and code.line.number. Nil means
+	// on unless SHIELD360_CAPTURE_CODE_LOCATION is false/0/no/off; a value
+	// set here wins over the environment.
+	CaptureCodeLocation *bool
+
+	// CaptureCallLocation also records the call site on the app's outbound
+	// calls: database, HTTP, RPC and messaging client (and producer) spans,
+	// so Shield360 can price the costly code patterns shield360 scan finds.
+	// Nil means on unless SHIELD360_CAPTURE_CALL_LOCATION is false/0/no/off;
+	// it has no effect when CaptureCodeLocation is off.
+	CaptureCallLocation *bool
+
+	// CodeRoot is stripped from code.file.path to make it repo-relative.
+	// Default: SHIELD360_CODE_ROOT, then the main module path (-trimpath
+	// builds) or the working directory.
+	CodeRoot string
+
+	// CodeLocationIgnoreModules lists extra module path prefixes whose
+	// frames are never reported as the call site (e.g. your own wrapper
+	// around the instrumented client).
+	CodeLocationIgnoreModules []string
+
+	// SHIELD: CaptureLogs sends the application's own log/slog records to
+	// Shield360 as OpenTelemetry logs, on the same endpoint and headers as
+	// traces (signal path /v1/logs). Nil means off unless
+	// SHIELD360_CAPTURE_LOGS is true/1/yes/on; a value set here wins. See
+	// LogHandler and CaptureLogs.
+	CaptureLogs *bool
+
+	// LogLevel is the lowest level sent when CaptureLogs is on: trace,
+	// debug, info, warn, error or fatal. Default: SHIELD360_LOG_LEVEL, then info.
+	LogLevel string
+
+	// SHIELD: Rasp turns on runtime application self-protection (the rasp
+	// package) unless Rasp.Disabled is set. Nil leaves it off unless
+	// SHIELD360_RASP=monitor|block; SHIELD360_RASP=off always wins. Events
+	// and the signed config use Shield360URL and Shield360APIKey.
+	Rasp *rasp.Options
+
+	// SHIELD: DisableRuntimePackages stops the runtime package report: the
+	// names and versions of the modules the binary was built with (never
+	// paths), sent to Shield360URL so it can match them against
+	// vulnerability data. On by default with a Shield360 URL and API key;
+	// SHIELD360_RUNTIME_PACKAGES=off also turns it off.
+	DisableRuntimePackages bool
 }
 
 // ModelPricing represents pricing information for a model
@@ -103,6 +170,7 @@ type ModelPricing struct {
 
 // setDefaults sets default values for the configuration
 func (c *Config) setDefaults() {
+	c.resolveDestination(os.Getenv)
 	if c.OtlpEndpoint == "" {
 		c.OtlpEndpoint = "http://127.0.0.1:4318"
 	}
@@ -143,4 +211,37 @@ func (c *Config) setDefaults() {
 	if c.OtlpHeaders == nil {
 		c.OtlpHeaders = make(map[string]string)
 	}
+}
+
+// IngestPath is the platform's authenticated OTLP ingest route.
+const IngestPath = "/api/ingest/otlp"
+
+// SHIELD: resolveDestination picks the OTLP endpoint when none was given, as
+// the Python and TypeScript SDKs do: OTEL_EXPORTER_OTLP_ENDPOINT, else a
+// Shield360 URL and API key resolve to the platform's ingest route with the
+// key as the bearer token. An explicit endpoint always wins, and an explicit
+// Authorization header is never overwritten.
+func (c *Config) resolveDestination(getenv func(string) string) {
+	if strings.TrimSpace(c.OtlpEndpoint) != "" {
+		return
+	}
+	if env := strings.TrimSpace(getenv("OTEL_EXPORTER_OTLP_ENDPOINT")); env != "" {
+		c.OtlpEndpoint = env
+		return
+	}
+	url := strings.TrimRight(strings.TrimSpace(firstNonEmpty(c.Shield360URL, getenv("SHIELD360_URL"))), "/")
+	key := strings.TrimSpace(firstNonEmpty(c.Shield360APIKey, getenv("SHIELD360_API_KEY")))
+	if url == "" || key == "" {
+		return
+	}
+	c.OtlpEndpoint = url + IngestPath
+	for name := range c.OtlpHeaders {
+		if strings.EqualFold(name, "Authorization") {
+			return
+		}
+	}
+	if c.OtlpHeaders == nil {
+		c.OtlpHeaders = make(map[string]string)
+	}
+	c.OtlpHeaders["Authorization"] = "Bearer " + key
 }
