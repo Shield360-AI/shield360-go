@@ -12,8 +12,8 @@ import (
 
 	"github.com/ThinkfleetAI/shield360-go/semconv"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // Code location attributes (OTel semantic conventions 1.30+).

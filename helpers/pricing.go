@@ -18,13 +18,13 @@ type PricingInfo struct {
 
 // PricingCache manages pricing information with automatic fetching
 type PricingCache struct {
-	mu                sync.RWMutex
-	prices            map[string]PricingInfo
-	endpoint          string
-	disableFetch      bool
-	lastFetch         time.Time
-	fetchInterval     time.Duration
-	client            *http.Client
+	mu            sync.RWMutex
+	prices        map[string]PricingInfo
+	endpoint      string
+	disableFetch  bool
+	lastFetch     time.Time
+	fetchInterval time.Duration
+	client        *http.Client
 }
 
 // pricingResponse represents the structure from the pricing JSON

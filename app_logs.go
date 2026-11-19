@@ -329,7 +329,7 @@ func NewLogHandler(opts LogHandlerOptions) slog.Handler {
 
 // isOwnScope: the SDK's and OpenTelemetry's own loggers are never exported.
 func isOwnScope(name string) bool {
-	for _, own := range []string{"shield360", "opentelemetry", "go.opentelemetry.io", "github.com/ThinkfleetAI/Shield360"} {
+	for _, own := range []string{"shield360", "opentelemetry", "go.opentelemetry.io", "github.com/Shield360-AI/Shield360"} {
 		if name == own || strings.HasPrefix(name, own+".") || strings.HasPrefix(name, own+"/") {
 			return true
 		}

@@ -4,22 +4,22 @@ import "io"
 
 // ChatCompletionRequest represents a chat completion request
 type ChatCompletionRequest struct {
-	Model            string                 `json:"model"`
-	Messages         []ChatMessage          `json:"messages"`
-	Temperature      float64                `json:"temperature,omitempty"`
-	TopP             float64                `json:"top_p,omitempty"`
-	N                int                    `json:"n,omitempty"`
-	Stream           bool                   `json:"stream,omitempty"`
-	Stop             []string               `json:"stop,omitempty"`
-	MaxTokens        int                    `json:"max_tokens,omitempty"`
-	PresencePenalty  float64                `json:"presence_penalty,omitempty"`
-	FrequencyPenalty float64                `json:"frequency_penalty,omitempty"`
-	User             string                 `json:"user,omitempty"`
-	Seed             int                    `json:"seed,omitempty"`
-	Tools            []Tool                 `json:"tools,omitempty"`
-	ToolChoice       interface{}            `json:"tool_choice,omitempty"`
-	ResponseFormat   *ResponseFormat        `json:"response_format,omitempty"`
-	StreamOptions    *StreamOptions         `json:"stream_options,omitempty"`
+	Model            string          `json:"model"`
+	Messages         []ChatMessage   `json:"messages"`
+	Temperature      float64         `json:"temperature,omitempty"`
+	TopP             float64         `json:"top_p,omitempty"`
+	N                int             `json:"n,omitempty"`
+	Stream           bool            `json:"stream,omitempty"`
+	Stop             []string        `json:"stop,omitempty"`
+	MaxTokens        int             `json:"max_tokens,omitempty"`
+	PresencePenalty  float64         `json:"presence_penalty,omitempty"`
+	FrequencyPenalty float64         `json:"frequency_penalty,omitempty"`
+	User             string          `json:"user,omitempty"`
+	Seed             int             `json:"seed,omitempty"`
+	Tools            []Tool          `json:"tools,omitempty"`
+	ToolChoice       interface{}     `json:"tool_choice,omitempty"`
+	ResponseFormat   *ResponseFormat `json:"response_format,omitempty"`
+	StreamOptions    *StreamOptions  `json:"stream_options,omitempty"`
 }
 
 // ChatMessage represents a message in a conversation
@@ -98,10 +98,10 @@ type ChatCompletionChunk struct {
 
 // ChatCompletionChunkChoice represents a streaming choice
 type ChatCompletionChunkChoice struct {
-	Index        int                `json:"index"`
-	Delta        ChatMessageDelta   `json:"delta"`
-	FinishReason string             `json:"finish_reason,omitempty"`
-	Logprobs     interface{}        `json:"logprobs,omitempty"`
+	Index        int              `json:"index"`
+	Delta        ChatMessageDelta `json:"delta"`
+	FinishReason string           `json:"finish_reason,omitempty"`
+	Logprobs     interface{}      `json:"logprobs,omitempty"`
 }
 
 // ChatMessageDelta represents incremental message content
@@ -142,10 +142,10 @@ type EmbeddingRequest struct {
 
 // EmbeddingResponse represents an embedding response
 type EmbeddingResponse struct {
-	Object string             `json:"object"`
-	Data   []EmbeddingData    `json:"data"`
-	Model  string             `json:"model"`
-	Usage  *EmbeddingUsage    `json:"usage"`
+	Object string          `json:"object"`
+	Data   []EmbeddingData `json:"data"`
+	Model  string          `json:"model"`
+	Usage  *EmbeddingUsage `json:"usage"`
 }
 
 // EmbeddingData represents a single embedding

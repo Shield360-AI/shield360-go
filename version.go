@@ -4,7 +4,7 @@ package shield360
 //
 // This is the single source of truth. Releases go through the Release /
 // Packages workflow, which tags this repository `sdk-go-<Version>`; the mirror
-// sync then tags ThinkfleetAI/shield360-go `v<Version>`, which is the tag Go
+// sync then tags Shield360-AI/shield360-go `v<Version>`, which is the tag Go
 // itself resolves, because a module's import path is its repository URL and
 // this repository is private.
 const Version = "1.0.0"

@@ -4,34 +4,34 @@ import "io"
 
 // MessageRequest represents a message request to Anthropic
 type MessageRequest struct {
-	Model         string          `json:"model"`
-	Messages      []Message       `json:"messages"`
-	MaxTokens     int             `json:"max_tokens"`
-	System        string          `json:"system,omitempty"`
-	Temperature   float64         `json:"temperature,omitempty"`
-	TopP          float64         `json:"top_p,omitempty"`
-	TopK          int             `json:"top_k,omitempty"`
-	StopSequences []string        `json:"stop_sequences,omitempty"`
-	Stream        bool            `json:"stream,omitempty"`
-	Tools         []Tool          `json:"tools,omitempty"`
-	ToolChoice    interface{}     `json:"tool_choice,omitempty"`
+	Model         string           `json:"model"`
+	Messages      []Message        `json:"messages"`
+	MaxTokens     int              `json:"max_tokens"`
+	System        string           `json:"system,omitempty"`
+	Temperature   float64          `json:"temperature,omitempty"`
+	TopP          float64          `json:"top_p,omitempty"`
+	TopK          int              `json:"top_k,omitempty"`
+	StopSequences []string         `json:"stop_sequences,omitempty"`
+	Stream        bool             `json:"stream,omitempty"`
+	Tools         []Tool           `json:"tools,omitempty"`
+	ToolChoice    interface{}      `json:"tool_choice,omitempty"`
 	Metadata      *MessageMetadata `json:"metadata,omitempty"`
 }
 
 // Message represents a message in a conversation
 type Message struct {
-	Role    string        `json:"role"`
-	Content interface{}   `json:"content"` // string or []ContentBlock
+	Role    string      `json:"role"`
+	Content interface{} `json:"content"` // string or []ContentBlock
 }
 
 // ContentBlock represents a block of content
 type ContentBlock struct {
-	Type   string          `json:"type"`
-	Text   string          `json:"text,omitempty"`
-	Source *ImageSource    `json:"source,omitempty"`
-	ID     string          `json:"id,omitempty"`
-	Name   string          `json:"name,omitempty"`
-	Input  interface{}     `json:"input,omitempty"`
+	Type   string       `json:"type"`
+	Text   string       `json:"text,omitempty"`
+	Source *ImageSource `json:"source,omitempty"`
+	ID     string       `json:"id,omitempty"`
+	Name   string       `json:"name,omitempty"`
+	Input  interface{}  `json:"input,omitempty"`
 }
 
 // ImageSource represents an image source
@@ -75,11 +75,11 @@ type Usage struct {
 
 // MessageStreamEvent represents a streaming event
 type MessageStreamEvent struct {
-	Type    string          `json:"type"`
+	Type    string           `json:"type"`
 	Message *MessageResponse `json:"message,omitempty"`
-	Index   int             `json:"index,omitempty"`
-	Delta   *MessageDelta   `json:"delta,omitempty"`
-	Usage   *Usage          `json:"usage,omitempty"`
+	Index   int              `json:"index,omitempty"`
+	Delta   *MessageDelta    `json:"delta,omitempty"`
+	Usage   *Usage           `json:"usage,omitempty"`
 }
 
 // MessageDelta represents incremental changes in a stream
