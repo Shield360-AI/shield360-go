@@ -664,6 +664,6 @@ Apache License 2.0 - see [LICENSE](../../LICENSE)
 
 ## Support
 
-- 📚 [Documentation](https://shield360.ai)
+- 📚 [Documentation](https://shield360.ai/)
 - 💬 [Slack Community](https://join.slack.com/t/shield360/shared_invite/zt-2etnfttwg-TjP_7BZXfYg84oAukY8QRQ)
 - 🐛 [Issue Tracker](https://github.com/Shield360-AI/shield360-go/issues)
