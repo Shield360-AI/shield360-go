@@ -4,7 +4,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/ThinkfleetAI/shield360-go/semconv"
+	"github.com/Shield360-AI/shield360-go/semconv"
 )
 
 // EmitInferenceEvent records the GenAI client inference operation details event.

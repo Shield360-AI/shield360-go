@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ThinkfleetAI/shield360-go/instrumentation/internal/spantest"
+	"github.com/Shield360-AI/shield360-go/instrumentation/internal/spantest"
 	"github.com/redis/go-redis/v9"
 )
 

@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/ThinkfleetAI/shield360-go/instrumentation/internal/spantest"
+	"github.com/Shield360-AI/shield360-go/instrumentation/internal/spantest"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 )

@@ -8,7 +8,7 @@ import (
 	"runtime"
 	"testing"
 
-	shield360 "github.com/ThinkfleetAI/shield360-go"
+	shield360 "github.com/Shield360-AI/shield360-go"
 	"go.opentelemetry.io/otel"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
@@ -53,7 +53,7 @@ func TestCodeLocationThroughInstrumentation(t *testing.T) {
 	if got := attrString(span, "code.file.path"); got != "code_location_test.go" && got != "instrumentation/vllm/code_location_test.go" {
 		t.Errorf("code.file.path = %q", got)
 	}
-	if got := attrString(span, "code.function.name"); got != "github.com/ThinkfleetAI/shield360-go/instrumentation/vllm.TestCodeLocationThroughInstrumentation" {
+	if got := attrString(span, "code.function.name"); got != "github.com/Shield360-AI/shield360-go/instrumentation/vllm.TestCodeLocationThroughInstrumentation" {
 		t.Errorf("code.function.name = %q", got)
 	}
 	var gotLine int64

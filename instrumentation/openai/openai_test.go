@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	shield360 "github.com/ThinkfleetAI/shield360-go"
+	shield360 "github.com/Shield360-AI/shield360-go"
 )
 
 // initSDK initialises Shield360 with all exporters disabled and registers cleanup.

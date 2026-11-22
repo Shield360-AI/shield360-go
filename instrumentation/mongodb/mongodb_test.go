@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/ThinkfleetAI/shield360-go/instrumentation/internal/spantest"
+	"github.com/Shield360-AI/shield360-go/instrumentation/internal/spantest"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/event"
 	"go.mongodb.org/mongo-driver/v2/x/mongo/driver"

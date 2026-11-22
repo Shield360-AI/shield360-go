@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"testing"
 
-	"github.com/ThinkfleetAI/shield360-go/rasp"
+	"github.com/Shield360-AI/shield360-go/rasp"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 

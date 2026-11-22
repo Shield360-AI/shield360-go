@@ -25,8 +25,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ThinkfleetAI/shield360-go/internal/guardevents"
-	"github.com/ThinkfleetAI/shield360-go/rasp"
+	"github.com/Shield360-AI/shield360-go/internal/guardevents"
+	"github.com/Shield360-AI/shield360-go/rasp"
 )
 
 // Runtime package report timing.

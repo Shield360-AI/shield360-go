@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ThinkfleetAI/shield360-go/rasp"
+	"github.com/Shield360-AI/shield360-go/rasp"
 )
 
 // Mirrors sdk/typescript/src/__tests__/runtime-packages.test.ts.

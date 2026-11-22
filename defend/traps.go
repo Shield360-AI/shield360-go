@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ThinkfleetAI/shield360-go/defend/internal/crumb"
+	"github.com/Shield360-AI/shield360-go/defend/internal/crumb"
 )
 
 // Defend's honeypots: dynamic, stateless crumbs byte for byte the shared

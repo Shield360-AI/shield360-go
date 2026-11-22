@@ -1,4 +1,4 @@
-module github.com/ThinkfleetAI/shield360-go
+module github.com/Shield360-AI/shield360-go
 
 go 1.26.0
 

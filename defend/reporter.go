@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	shield360 "github.com/ThinkfleetAI/shield360-go"
+	shield360 "github.com/Shield360-AI/shield360-go"
 )
 
 // Defend's decisions to Shield360: deny, challenge and trap decisions and

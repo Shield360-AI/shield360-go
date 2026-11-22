@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"net/http"
 
-	"github.com/ThinkfleetAI/shield360-go/rasp"
+	"github.com/Shield360-AI/shield360-go/rasp"
 	"github.com/XSAM/otelsql"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"

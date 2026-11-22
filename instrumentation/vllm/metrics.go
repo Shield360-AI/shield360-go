@@ -3,7 +3,7 @@ package vllm
 import (
 	"sync"
 
-	"github.com/ThinkfleetAI/shield360-go/semconv"
+	"github.com/Shield360-AI/shield360-go/semconv"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/metric"
 )

@@ -5,7 +5,7 @@ import (
 	"math"
 	"sync"
 
-	"github.com/ThinkfleetAI/shield360-go/clienttype"
+	"github.com/Shield360-AI/shield360-go/clienttype"
 )
 
 // The decision order (docs/latest/shield360/defend.mdx): kill switch, deny

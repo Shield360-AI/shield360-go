@@ -338,7 +338,7 @@ func IastRouteOf(p string) string { return EventRouteOf(p) }
 
 // sdkPackage is the function-name prefix of this module's packages: frames
 // there are the SDK's, except its tests.
-const sdkPackage = "github.com/ThinkfleetAI/shield360-go"
+const sdkPackage = "github.com/Shield360-AI/shield360-go"
 
 // stdRoot is the standard library's source directory as frames report it
 // (GOROOT/src/), found from a standard library function's file.

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ThinkfleetAI/shield360-go/instrumentation/internal/spantest"
+	"github.com/Shield360-AI/shield360-go/instrumentation/internal/spantest"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	grpccodes "google.golang.org/grpc/codes"

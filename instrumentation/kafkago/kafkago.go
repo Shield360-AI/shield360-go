@@ -30,7 +30,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-const scope = "github.com/ThinkfleetAI/shield360-go/instrumentation/kafkago"
+const scope = "github.com/Shield360-AI/shield360-go/instrumentation/kafkago"
 
 func tracer() trace.Tracer { return otel.Tracer(scope) }
 

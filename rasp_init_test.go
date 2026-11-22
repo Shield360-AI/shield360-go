@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/ThinkfleetAI/shield360-go/rasp"
+	"github.com/Shield360-AI/shield360-go/rasp"
 )
 
 // SHIELD: Config.Rasp turns runtime protection on through Init.

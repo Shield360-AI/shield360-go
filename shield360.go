@@ -10,9 +10,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ThinkfleetAI/shield360-go/flags"
-	"github.com/ThinkfleetAI/shield360-go/helpers"
-	"github.com/ThinkfleetAI/shield360-go/rasp"
+	"github.com/Shield360-AI/shield360-go/flags"
+	"github.com/Shield360-AI/shield360-go/helpers"
+	"github.com/Shield360-AI/shield360-go/rasp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp"

@@ -1,6 +1,6 @@
 package shield360
 
-import "github.com/ThinkfleetAI/shield360-go/flags"
+import "github.com/Shield360-AI/shield360-go/flags"
 
 // Flags is the SDK's feature-flags client. It fetches the environment's flags
 // from Config.Shield360URL with Config.Shield360APIKey (or SHIELD360_URL and

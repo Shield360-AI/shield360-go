@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/ThinkfleetAI/shield360-go/instrumentation/internal/spantest"
+	"github.com/Shield360-AI/shield360-go/instrumentation/internal/spantest"
 	"github.com/segmentio/kafka-go"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"

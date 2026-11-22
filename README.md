@@ -2,8 +2,8 @@
 
 OpenTelemetry-native observability SDK for LLM applications in Go. Monitor your AI applications with automatic instrumentation for popular LLM providers.
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/ThinkfleetAI/shield360-go.svg)](https://pkg.go.dev/github.com/ThinkfleetAI/shield360-go)
-[![Go Report Card](https://goreportcard.com/badge/github.com/ThinkfleetAI/shield360-go)](https://goreportcard.com/report/github.com/ThinkfleetAI/shield360-go)
+[![Go Reference](https://pkg.go.dev/badge/github.com/Shield360-AI/shield360-go.svg)](https://pkg.go.dev/github.com/Shield360-AI/shield360-go)
+[![Go Report Card](https://goreportcard.com/badge/github.com/Shield360-AI/shield360-go)](https://goreportcard.com/report/github.com/Shield360-AI/shield360-go)
 
 ## Features
 
@@ -37,7 +37,7 @@ import (
     "context"
     "log"
     
-    "github.com/ThinkfleetAI/shield360-go"
+    "github.com/Shield360-AI/shield360-go"
 )
 
 func main() {
@@ -60,7 +60,7 @@ func main() {
 
 ```go
 import (
-    "github.com/ThinkfleetAI/shield360-go/instrumentation/openai"
+    "github.com/Shield360-AI/shield360-go/instrumentation/openai"
     openai_sdk "github.com/sashabaranov/go-openai"
 )
 
@@ -84,7 +84,7 @@ resp, err := instrumentedClient.CreateChatCompletion(ctx, openai_sdk.ChatComplet
 
 ```go
 import (
-    "github.com/ThinkfleetAI/shield360-go/instrumentation/anthropic"
+    "github.com/Shield360-AI/shield360-go/instrumentation/anthropic"
 )
 
 // Create and instrument Anthropic client
@@ -112,7 +112,7 @@ so they are distinct from OpenAI.
 
 ```go
 import (
-    "github.com/ThinkfleetAI/shield360-go/instrumentation/vllm"
+    "github.com/Shield360-AI/shield360-go/instrumentation/vllm"
 )
 
 client := vllm.NewClient("http://127.0.0.1:8000/v1") // optional: vllm.WithAPIKey("...")
@@ -475,7 +475,7 @@ signed policy (`GET /api/defend/policy`, typ `shield360-defend+jws`, pinned like
 No network call on the request path unless `SharedRateLimits` is set. Fails open by default.
 
 ```go
-import "github.com/ThinkfleetAI/shield360-go/defend"
+import "github.com/Shield360-AI/shield360-go/defend"
 
 shield, err := defend.New(defend.Options{
 	App:    "checkout",

@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ThinkfleetAI/shield360-go/clienttype"
+	"github.com/Shield360-AI/shield360-go/clienttype"
 )
 
 // Defend's shared data and corpora: the prompt-injection golden corpus

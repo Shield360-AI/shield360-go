@@ -32,7 +32,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ThinkfleetAI/shield360-go/clienttype"
+	"github.com/Shield360-AI/shield360-go/clienttype"
 )
 
 // AIAttackAgent is the attack type of AI attack agents and attack tools.

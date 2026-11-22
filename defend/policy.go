@@ -7,8 +7,8 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/ThinkfleetAI/shield360-go/clienttype"
-	"github.com/ThinkfleetAI/shield360-go/rasp"
+	"github.com/Shield360-AI/shield360-go/clienttype"
+	"github.com/Shield360-AI/shield360-go/rasp"
 )
 
 // The signed policy (typ shield360-defend+jws). Anything malformed is

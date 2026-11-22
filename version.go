@@ -7,4 +7,4 @@ package shield360
 // sync then tags Shield360-AI/shield360-go `v<Version>`, which is the tag Go
 // itself resolves, because a module's import path is its repository URL and
 // this repository is private.
-const Version = "1.1.1"
+const Version = "1.2.0"

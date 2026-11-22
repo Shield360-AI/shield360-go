@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	shield360 "github.com/ThinkfleetAI/shield360-go"
-	"github.com/ThinkfleetAI/shield360-go/helpers"
-	"github.com/ThinkfleetAI/shield360-go/semconv"
+	shield360 "github.com/Shield360-AI/shield360-go"
+	"github.com/Shield360-AI/shield360-go/helpers"
+	"github.com/Shield360-AI/shield360-go/semconv"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"

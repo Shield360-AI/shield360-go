@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ThinkfleetAI/shield360-go/helpers"
-	"github.com/ThinkfleetAI/shield360-go/instrumentation/anthropic"
-	"github.com/ThinkfleetAI/shield360-go/instrumentation/openai"
+	"github.com/Shield360-AI/shield360-go/helpers"
+	"github.com/Shield360-AI/shield360-go/instrumentation/anthropic"
+	"github.com/Shield360-AI/shield360-go/instrumentation/openai"
 )
 
 func TestSDKInitialization(t *testing.T) {

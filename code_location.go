@@ -10,7 +10,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ThinkfleetAI/shield360-go/semconv"
+	"github.com/Shield360-AI/shield360-go/semconv"
 	"go.opentelemetry.io/otel/attribute"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
@@ -22,7 +22,7 @@ const (
 	attrCodeFilePath     = "code.file.path"
 	attrCodeLineNumber   = "code.line.number"
 
-	sdkModulePath     = "github.com/ThinkfleetAI/shield360-go"
+	sdkModulePath     = "github.com/Shield360-AI/shield360-go"
 	maxCodeCacheSize  = 4096
 	maxCallerFrames   = 64
 	envCaptureCodeLoc = "SHIELD360_CAPTURE_CODE_LOCATION"

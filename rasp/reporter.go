@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ThinkfleetAI/shield360-go/internal/guardevents"
+	"github.com/Shield360-AI/shield360-go/internal/guardevents"
 )
 
 // The RASP event reporter (README "Events"). Batches shield360.rasp.event

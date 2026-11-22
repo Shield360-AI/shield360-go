@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/ThinkfleetAI/shield360-go/clienttype"
+	"github.com/Shield360-AI/shield360-go/clienttype"
 )
 
 func testPolicy(t *testing.T, over string) (*Policy, *compiled) {

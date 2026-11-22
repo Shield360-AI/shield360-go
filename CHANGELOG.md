@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-22
+
+### Changed
+- **Module path is now `github.com/Shield360-AI/shield360-go`** (was `github.com/ThinkfleetAI/shield360-go`; the repository moved to the Shield360-AI organization). Update your imports and run `go get github.com/Shield360-AI/shield360-go@v1.2.0`. Versions 1.1.1 and earlier keep the old path.
+- Edge context: accepts the `sid`/`fp` (security session, fingerprint) and `dk`/`dt` (trusted device) keys.
+
 ### Fixed
 - Protection triangle: Edge's signed context is trusted only when the request carries Edge's own `X-Request-Id` and it equals the signed rid. A missing header no longer skips the check (`sdk/rasp/testdata/triangle.json` since #1078).
 

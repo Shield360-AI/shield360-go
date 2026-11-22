@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ThinkfleetAI/shield360-go/rasp"
+	"github.com/Shield360-AI/shield360-go/rasp"
 )
 
 // Defend end to end: the signed policy, traps, the decisions feed, Edge's

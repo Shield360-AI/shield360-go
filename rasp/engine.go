@@ -5,7 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
-	"github.com/ThinkfleetAI/shield360-go/internal/masking"
+	"github.com/Shield360-AI/shield360-go/internal/masking"
 	"os"
 	"regexp"
 	"strings"

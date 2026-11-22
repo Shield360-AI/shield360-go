@@ -38,8 +38,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ThinkfleetAI/shield360-go/clienttype"
-	"github.com/ThinkfleetAI/shield360-go/rasp"
+	"github.com/Shield360-AI/shield360-go/clienttype"
+	"github.com/Shield360-AI/shield360-go/rasp"
 )
 
 // Shield360 endpoints and Defend's block body.

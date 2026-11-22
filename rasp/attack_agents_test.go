@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ThinkfleetAI/shield360-go/clienttype"
+	"github.com/Shield360-AI/shield360-go/clienttype"
 )
 
 // AI attack agents (sdk/rasp/README.md "AI attack agents"): the shared

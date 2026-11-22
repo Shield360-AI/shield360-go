@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
-	shield360 "github.com/ThinkfleetAI/shield360-go"
-	"github.com/ThinkfleetAI/shield360-go/helpers"
-	"github.com/ThinkfleetAI/shield360-go/semconv"
+	shield360 "github.com/Shield360-AI/shield360-go"
+	"github.com/Shield360-AI/shield360-go/helpers"
+	"github.com/Shield360-AI/shield360-go/semconv"
 	"go.opentelemetry.io/otel"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"

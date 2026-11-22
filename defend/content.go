@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/ThinkfleetAI/shield360-go/defend/internal/injection"
+	"github.com/Shield360-AI/shield360-go/defend/internal/injection"
 )
 
 // Prompt injection and sensitive data in the text the app passes to Defend

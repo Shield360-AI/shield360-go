@@ -3,7 +3,7 @@ package vllm
 import (
 	"context"
 
-	"github.com/ThinkfleetAI/shield360-go/rasp"
+	"github.com/Shield360-AI/shield360-go/rasp"
 )
 
 // recordModelOutput hands what the model returned to RASP as untrusted

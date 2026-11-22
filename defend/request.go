@@ -6,8 +6,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/ThinkfleetAI/shield360-go/clienttype"
-	"github.com/ThinkfleetAI/shield360-go/rasp"
+	"github.com/Shield360-AI/shield360-go/clienttype"
+	"github.com/Shield360-AI/shield360-go/rasp"
 )
 
 // What Defend reads from a request. Header values stay in memory for the one

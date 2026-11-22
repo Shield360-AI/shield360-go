@@ -34,7 +34,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-const scope = "github.com/ThinkfleetAI/shield360-go/instrumentation/mongodb"
+const scope = "github.com/Shield360-AI/shield360-go/instrumentation/mongodb"
 
 // Commands that are connection plumbing, not the app's work.
 var skipped = map[string]bool{
