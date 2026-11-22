@@ -33,11 +33,57 @@ type Context struct {
 	// uploads are the upload names recorded (field, name), so each is
 	// checked once.
 	uploads map[string]bool
+	// SHIELD: backdoor checks — the request's inspected uploads (name and
+	// verdict, at most 64), for writes named after one or holding its bytes.
+	savedUploads []requestUpload
 
 	// req is the request the middleware handed on: a ServeMux sets its
 	// Pattern when it routes it, after capture.
 	req         *http.Request
 	patternDone bool
+
+	// SHIELD: protection triangle — Edge's verified context (edge_context.go),
+	// the response-header setter for the verdict, and whether it was sent.
+	edge        *EdgeRequestContext
+	setHeader   func(name, value string)
+	verdictSent bool
+	// SHIELD: request correlation — Edge's request id (verified context, else
+	// X-Request-Id) and the traceparent's trace id (edge_request.go).
+	requestID string
+	traceID   string
+
+	// SHIELD: AI attack agents (attack_agents.go) — the signed-in user the
+	// app named, the check and scoring state, the headers for scoring,
+	// Edge's verification, whether a RASP finding happened and whether
+	// Shield360 answered itself (never scored).
+	agentUser     string
+	agentsChecked bool
+	agentsScored  bool
+	agentHeaders  map[string]string
+	agentVerified bool
+	agentFinding  bool
+	ownBlock      bool
+}
+
+// Edge returns Edge's verified context for the request, or nil.
+func (c *Context) Edge() *EdgeRequestContext {
+	if c == nil {
+		return nil
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.edge
+}
+
+// SetHeaderFunc sets how a response header is added (the verdict for Edge
+// goes out through it); Middleware sets it.
+func (c *Context) SetHeaderFunc(f func(name, value string)) {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	c.setHeader = f
+	c.mu.Unlock()
 }
 
 // vpState is the virtual-patch state of a request: the request as the rules

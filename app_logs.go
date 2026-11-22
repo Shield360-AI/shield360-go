@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/ThinkfleetAI/shield360-go/internal/masking"
+	"github.com/ThinkfleetAI/shield360-go/rasp"
 	"io"
 	stdlog "log"
 	"log/slog"
@@ -415,6 +416,17 @@ func (h *logHandler) Handle(ctx context.Context, r slog.Record) (err error) {
 		b.add(h.group, a)
 		return true
 	})
+	// SHIELD: request correlation — Edge's request id, and the trace id when no
+	// span carries it (rasp/edge_request.go). Both are id-shaped by then and are
+	// not secrets, so they are not masked.
+	if rid, tid, spanActive := rasp.EdgeIDs(ctx); rid != "" || (tid != "" && !spanActive) {
+		if rid != "" {
+			b.kvs = append(b.kvs, attribute.String(rasp.EdgeRequestIDAttr, rid))
+		}
+		if tid != "" && !spanActive {
+			b.kvs = append(b.kvs, attribute.String(rasp.EdgeTraceIDAttr, tid))
+		}
+	}
 	rec.AddAttributes(b.kvs...)
 
 	logger.Emit(context.WithValue(ctx, emittingKey{}, true), rec)

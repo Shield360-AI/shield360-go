@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+
+	"go.opentelemetry.io/otel/trace"
 )
 
 // Request capture: turns a request into the context's inputs (README
@@ -248,6 +250,23 @@ func captureRequest(r *http.Request, framework string) *Context {
 	c.vp = &vpState{req: VpRequest{Method: r.Method, Path: path, Query: rawQuery, Headers: headers, Cookie: cookie}}
 	c.req = r
 	c.fromPatternLocked()
+	// SHIELD: protection triangle — Edge's signed context, verified (never
+	// trusted unverified), cross-checked against Edge's own X-Request-Id.
+	requestIDHeader := r.Header.Get(RequestIDHeader)
+	if v := r.Header.Get(EdgeContextHeader); v != "" {
+		if keys := edgeKeys(); len(keys) > 0 {
+			c.edge = VerifyEdgeContext(keys, v, r.Method, path, requestIDHeader)
+		}
+	}
+	// SHIELD: request correlation — Edge's request id and the trace for log
+	// records and the server span (edge_request.go).
+	if c.edge != nil {
+		c.requestID = c.edge.Rid
+	} else {
+		c.requestID = RequestIDOf(requestIDHeader)
+	}
+	c.traceID = TraceIDOf(r.Header.Get("Traceparent"))
+	TagServerSpan(trace.SpanFromContext(r.Context()), c.requestID)
 	return c
 }
 

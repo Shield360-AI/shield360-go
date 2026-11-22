@@ -49,12 +49,18 @@ const (
 	// CustomRuleAttack is the organization's own rules (README "Custom
 	// rules"); a rule's action is capped by this mode.
 	CustomRuleAttack AttackType = "custom_rule"
+	// MaliciousUpload is what an uploaded file is (README "Uploads").
+	MaliciousUpload AttackType = "malicious_upload"
+	// UploadBackdoor is an uploaded file saved where it runs, loaded, run or
+	// made executable (README "Uploads", "Backdoor checks").
+	UploadBackdoor AttackType = "upload_backdoor"
 )
 
 // AttackTypes lists every attack type, in the contract's order.
 var AttackTypes = []AttackType{
 	SQLInjection, NoSQLInjection, CommandInjection, ShellSpawn, PathTraversal, FileWrite,
 	SSRF, Outbound, Deserialization, CodeInjection, XXE, XSS, VirtualPatch, Baseline, CustomRuleAttack,
+	MaliciousUpload, UploadBackdoor, AIAttackAgent,
 }
 
 // MonitorOnly reports whether an attack type only ever reports: block is
@@ -106,6 +112,19 @@ type Finding struct {
 	Target string
 	// Dialect is the dialect the SQL lexer used (sql_injection findings).
 	Dialect SQLDialect
+	// Mode, when set, decides instead of the attack type's mode (an upload
+	// route's policy), capped like attack modes (README "Upload policy and
+	// deep scan").
+	Mode Mode
+	// Upload is what the event says about an uploaded file (README "Upload
+	// event attributes"); never a file name or content.
+	Upload *UploadAttrs
+}
+
+// UploadAttrs are the upload event attributes (README "Upload event attributes").
+type UploadAttrs struct {
+	Type, Kind, Ext, SHA256, Signature, Engine, Dest, Action string
+	Size                                                     int64
 }
 
 // Allow holds the contract's allow-lists.
@@ -144,6 +163,10 @@ type BlockedError struct {
 	Attack  AttackType
 	Rule    string
 	EventID string
+	// RetryAfter is set on the deter answer (README "AI attack agents"): a
+	// marked attack agent in block mode gets 429 with this Retry-After
+	// (seconds) instead of the 403.
+	RetryAfter int
 }
 
 func (e *BlockedError) Error() string {
@@ -153,8 +176,17 @@ func (e *BlockedError) Error() string {
 // Is makes errors.Is(err, ErrBlocked) true for every block error.
 func (e *BlockedError) Is(target error) bool { return target == ErrBlocked }
 
-// StatusCode is the HTTP status the block error maps to (403).
-func (e *BlockedError) StatusCode() int { return 403 }
+// StatusCode is the HTTP status the block error maps to: 403, or 429 for
+// the deter answer.
+func (e *BlockedError) StatusCode() int {
+	if e.RetryAfter > 0 {
+		return 429
+	}
+	return 403
+}
+
+// DeterMessage is the deter answer's error text.
+const DeterMessage = "Too Many Requests"
 
 // AsBlocked returns the block error in err's chain, or nil.
 func AsBlocked(err error) *BlockedError {

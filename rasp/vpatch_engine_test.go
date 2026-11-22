@@ -188,6 +188,16 @@ func setupEngine(t *testing.T, s engineSettings) *eventLog {
 		s.getenv = noEnv
 	}
 	s.enabled = true
+	// SHIELD: AI attack agents — off unless the test sets it: findings and 404s from the
+	// shared test address would otherwise add up across tests and mark it.
+	if _, ok := s.attacks[AIAttackAgent]; !ok {
+		attacks := map[AttackType]Mode{AIAttackAgent: ModeOff}
+		for k, v := range s.attacks {
+			attacks[k] = v
+		}
+		s.attacks = attacks
+	}
+	setAgentTracker(nil)
 	configureEngine(s)
 	log := &eventLog{}
 	setEventSink(log)

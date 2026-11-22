@@ -192,6 +192,8 @@ func deceptionSetup(t *testing.T, s engineSettings, block string, over func(*Rem
 	log := setupEngine(t, s)
 	r := remote(func(r *RemoteConfig) {
 		r.Deception = ParseDeception(json.RawMessage(block))
+		// SHIELD: AI attack agents — off here (decoy hits add to its score); attack_agents_test.go covers the two together.
+		r.Attacks[AIAttackAgent] = ModeOff
 		if over != nil {
 			over(r)
 		}

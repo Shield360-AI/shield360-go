@@ -244,10 +244,9 @@ func (e *AppEngine) Handle(ctx context.Context, c *Context, f *Finding, sink str
 	if f == nil || !e.Active() {
 		return DecisionNone, nil
 	}
-	mode := e.ModeFor(f.Attack)
-	if f.Action != "" && modeRank[f.Action] < modeRank[mode] {
-		mode = f.Action
-	}
+	// An upload route's own mode decides instead of the attack type's
+	// (uploadMode), capped like attack modes; f.Action caps it too.
+	mode := e.uploadMode(f)
 	if mode == ModeOff {
 		return DecisionNone, nil
 	}
@@ -322,6 +321,7 @@ func (e *AppEngine) event(c *Context, f *Finding, sink string, extra FindingExtr
 		attrs["shield360.rasp.snippet"] = MaskSnippet(f.Input.Value)
 	}
 	addTargetAttrs(attrs, f, remote)
+	addUploadAttrs(attrs, f)
 	key := strings.Join([]string{string(f.Attack), f.Rule, sink, route, string(decision)}, "\x00")
 	return Event{Name: EventName, Time: time.Now().UTC().Format("2006-01-02T15:04:05.000Z"), Attrs: attrs}, key
 }

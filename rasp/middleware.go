@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 )
 
@@ -39,12 +40,21 @@ func WriteBlocked(w http.ResponseWriter, err error) bool {
 		return false
 	}
 	defer func() { _ = recover() }() // the response is already gone
-	body, _ := json.Marshal(BodyOf(b))
+	var body []byte
+	if b.RetryAfter > 0 {
+		// SHIELD: AI attack agents — the deter answer (README "AI attack agents").
+		body, _ = json.Marshal(map[string]string{"error": DeterMessage})
+	} else {
+		body, _ = json.Marshal(BodyOf(b))
+	}
 	h := w.Header()
 	h.Set("Content-Type", "application/json")
 	h.Set("Cache-Control", "no-store")
 	h.Del("Content-Length")
-	w.WriteHeader(http.StatusForbidden)
+	if b.RetryAfter > 0 {
+		h.Set("Retry-After", strconv.Itoa(b.RetryAfter))
+	}
+	w.WriteHeader(b.StatusCode())
 	_, _ = w.Write(body)
 	return true
 }
@@ -83,13 +93,15 @@ func readBody(r *http.Request) []byte {
 // begin captures the request. It returns the RASP context, or the block
 // error when a virtual patch blocks; a nil context means capture failed
 // (fail open).
-func begin(r *http.Request) (c *Context, blocked error) {
+func begin(r *http.Request, w http.ResponseWriter) (c *Context, blocked error) {
 	defer func() {
 		if recover() != nil {
 			c, blocked = nil, nil
 		}
 	}()
 	c = captureRequest(r, Framework)
+	// SHIELD: AI attack agents — the deter answer can carry the verdict for Edge.
+	c.setHeader = func(name, value string) { w.Header().Set(name, value) }
 	// The head phase runs before the body is read, so its rules see only
 	// the inputs known before the body (README "When rules run").
 	if err := runVirtualPatches(c); err != nil {
@@ -107,6 +119,10 @@ func begin(r *http.Request) (c *Context, blocked error) {
 	}
 	if err := runVirtualPatches(c); err != nil {
 		return nil, err
+	}
+	// SHIELD: AI attack agents — once the inputs are known: a marked client is deterred here.
+	if b := agentsBefore(r.Context(), c, r); b != nil {
+		return nil, b
 	}
 	return c, nil
 }
@@ -126,15 +142,20 @@ func Middleware(next http.Handler) http.Handler {
 		}
 		// Deception first: a decoy never reaches the handler and gets the
 		// standard library's not-found answer (README "Deception").
-		switch v, b := checkDeception(r.Context(), r, Framework); v {
+		switch v, b, page := checkDeception(r.Context(), r, Framework); v {
 		case deceptionNotFound:
+			// SHIELD: AI attack agents — the decoy 404 may carry the LLM tripwire page.
+			if page != "" {
+				writeTripwirePage(w, r, page)
+				return
+			}
 			http.NotFound(w, r)
 			return
 		case deceptionBlocked:
 			WriteBlocked(w, b)
 			return
 		}
-		c, blocked := begin(r)
+		c, blocked := begin(r, w)
 		if blocked != nil {
 			WriteBlocked(w, blocked)
 			return
@@ -146,6 +167,10 @@ func Middleware(next http.Handler) http.Handler {
 		r2 := r.WithContext(withContext(r.Context(), c))
 		c.mu.Lock()
 		c.req = r2
+		// SHIELD: protection triangle — a verdict for Edge goes out as a
+		// response header (it is set before the handler writes on a sink
+		// check; once headers are written it is too late, as in every SDK).
+		c.setHeader = func(name, value string) { w.Header().Set(name, value) }
 		c.mu.Unlock()
 		defer func() {
 			if v := recover(); v != nil {
@@ -155,7 +180,8 @@ func Middleware(next http.Handler) http.Handler {
 				panic(v)
 			}
 		}()
-		next.ServeHTTP(w, r2)
+		// SHIELD: AI attack agents — scored when the status goes out.
+		next.ServeHTTP(&statusWriter{ResponseWriter: w, ctx: r2.Context(), rc: c}, r2)
 	})
 }
 

@@ -439,6 +439,73 @@ logger.Error("payment failed", "err", err) // exception.type, exception.message
 - **Never sent**: records from handlers named `shield360…` or `opentelemetry…`, the SDK's own `log` lines, and anything logged while a record is being exported.
 - `shield360.CaptureLogs(level)` and `shield360.StopCapturingLogs()` turn it on and off after `Init`; `shield360.NewLogHandler(shield360.LogHandlerOptions{...})` takes your own OpenTelemetry `LoggerProvider`, level and rate.
 
+## Security feature coverage
+
+Kept level with the TypeScript SDK (the reference). Each row passes the shared corpus named.
+
+| Feature | Go | Shared corpus |
+|---|---|---|
+| RASP sinks, custom rules, passive IAST, deception, baseline | yes | `sdk/rasp/testdata/*.json` |
+| Protection triangle (Edge context, tightening, verdict header) | yes (`rasp.Middleware`) | `sdk/rasp/testdata/triangle.json` |
+| Request correlation (Edge's request id and the trace id on slog records and the server span) | yes | `sdk/rasp/testdata/request-correlation.json` |
+| Defend (`defend()`, signed policy, decisions feed, shared rate limits, reporting, client type, honeypot crumbs, content check) | yes (`defend.New`, `Middleware`) | injection golden corpus, crumb spec vector, byte-identical `injection-rules.json` and client-type signatures |
+| Upload protection (inspection, signed policy, deep scan, backdoor checks) | yes (`InspectUpload`, `InspectUploadFile`, `UploadOptionsFor`, `UploadSaved`; ClamAV, reputation, own signatures; the file and exec drop-ins) | `sdk/rasp/testdata/uploads.json`, byte-identical `upload-signatures.json` |
+
+**Protection triangle.** With Shield360 Edge in front of the app, `rasp.Middleware` verifies Edge's
+signed `X-Shield360-Edge-Context` header (keys from the signed config's `edgeContext`,
+cross-checked against Edge's own `X-Request-Id`). A client Edge marked (flagged, trap level 2 or
+more, or risk 70 or more, unless a verified crawler or agent) is blocked for injection-class attacks
+the app only monitors (`shield360.rasp.tightened_by_edge`; a rule's own action and the monitor-only
+switch still apply). Every event of such a request carries `shield360.edge.request_id`, and the
+first finding is answered with a signed `X-Shield360-Verdict` response header (set before the
+handler writes its response) so Edge stops the client on its next request.
+
+**Request correlation.** Edge's request id (from its verified context, else an id-shaped
+`X-Request-Id`, which Edge always sets) goes on the request's server span (`shield360.Handler`,
+the RASP capture) and on every slog record logged with the request's context
+(`slog.InfoContext(r.Context(), …)`, or a context derived from it) as `shield360.edge.request_id`,
+with the trace id of the request's `traceparent` as `shield360.edge.trace_id` when no span is
+active.
+
+## Defend - `defend.New()`
+
+Decide in the app whether a request may go on: the deny, challenge and trust lists, rules (paths,
+methods, countries, ASNs, client types, prompt injection, rates), traps and honeypot crumbs, from a
+signed policy (`GET /api/defend/policy`, typ `shield360-defend+jws`, pinned like the RASP config).
+No network call on the request path unless `SharedRateLimits` is set. Fails open by default.
+
+```go
+import "github.com/ThinkfleetAI/shield360-go/defend"
+
+shield, err := defend.New(defend.Options{
+	App:    "checkout",
+	URL:    os.Getenv("SHIELD360_URL"),
+	APIKey: os.Getenv("SHIELD360_API_KEY"),
+	// ConfigPublicKey or SHIELD360_CONFIG_PUBLIC_KEY pins the policy key.
+})
+if err != nil {
+	log.Fatal(err)
+}
+defer shield.Close()
+
+http.ListenAndServe(":8080", shield.Middleware(mux)) // 403 / 401 / honeypot decoys
+
+// Or decide yourself, with content to check:
+r := shield.Defend(defend.RequestOf(req), defend.Call{Content: []string{prompt}})
+if answer := defend.ResponseFor(r); answer != nil { /* answer.Status, Headers, Body */ }
+```
+
+- **Decision order:** kill switch, deny list, agent policy (`Options.Agents`), trap hit, challenge
+  list, rules (first match wins; `allow` stops, `monitor` goes on), then sensitive data.
+  `SHIELD360_DEFEND=monitor` reports without denying; `off` allows everything.
+- **Client type** (`clienttype.Classify`): human, verified agent, unverified automation or suspected
+  AI agent, from the shared signatures, Edge's verified context and how widely a client roams.
+- **Decisions feed:** a block made anywhere reaches every instance within about 5 s.
+- **Traps and honeypots:** `TrapHit` marks a client; with honeypots on, decoy files (`/.env`,
+  `/config.json`, ...) and crumbs (`Crumbs`) byte for byte the ones Shield360 Edge serves.
+- **Reporting:** deny, challenge and trap decisions and `FailedLogin` go to `/api/defend/report`,
+  batched and folded; never a header, body, user name or password.
+
 ## Feature flags - `shield360.Flags()`
 
 Fetch an environment's feature flags and evaluate them locally, with the same engine as the Shield360 server and the other SDKs (the `flags` package). The client polls `GET /api/flags/rules` every 30 seconds (with ±10% jitter, at least every 5 seconds if you set `PollInterval`, sending the last `ETag` so an unchanged environment costs a 304) and starts on first use. It never panics or returns errors: until rules arrive, for an unknown flag, for a flag scoped to another app, for a value of the wrong kind, or on any error, you get your default.
@@ -553,6 +620,13 @@ if rasp.WriteBlocked(w, err) { return } // the contract's 403
 Event sinks name the call (`db.postgres.query`, `exec.CommandContext`, `http.Transport`, `os.ReadFile`, `http.response`). The contract's sink rules are for Node and Python; Go ignores them.
 
 Uploads: `rasp.Middleware` reads the file names of `multipart/form-data` uploads from the part headers of the body it buffers, with `mime/multipart` and the request's boundary, so the names are those the handler's parser sees (at most 32 names, from the first 1 MiB; part bodies are skipped and the handler still reads the whole body). `rasp.RecordRequestBody` takes a parsed `*multipart.Form`, also after the middleware buffered the body, and adds any names not seen yet; each name is checked once. Detection reads the whole name, although the recorded input is cut at 4096 characters. The names are request input (`body.<field>.filename`), and an upload named like a script (`.php`, `.jsp`, `.sh`, `.exe`…) is reported at sink `request.upload` (`file_write.upload`; blocks when `file_write` blocks). A later `rasp.WriteFile` or `rasp.Create` named after the upload is caught by `file_write.script`.
+
+Upload protection (`sdk/rasp/README.md`, "Uploads"), four layers:
+
+- **Inspection:** `rasp.InspectUpload(ctx, part, name, contentType, rasp.UploadOptionsFor(route))` for each file part (or `rasp.InspectUploadFile` for a file already on disk) reads the real type, archives, macros and web-shell signatures in bounded memory.
+- **Signed policy:** the signed config's `uploads` block (`allow`, `maxBytes`, `servedDirs`, `trusted`, `rules`, `deepScan`, `routes`), else `Options.Uploads` (the same block as JSON, plus `ScanBytes` and `QuarantineDir`).
+- **Deep scan:** with `deepScan.mode` monitor or block, the customer's own clamd (`zINSTREAM` over `tcp:` or `unix:`, streamed as the part is read), the hash-only reputation lookup (only the SHA-256 leaves the app) and the organization's own signatures. `scan: sync` holds the upload until the engines answer; `scan: async` scans after `rasp.UploadSaved` and moves a file the mode blocks to quarantine. `failMode: closed` raises `upload.scan_unavailable`. Engine status goes to Shield360 as `shield360.rasp.scanner` records.
+- **Backdoor checks:** `rasp.UploadSaved(ctx, path, verdict, opts)` remembers where an upload was saved (as do `InspectUploadFile`, and writes during the request whose data is an upload's bytes or whose name is an upload's name). `rasp.WriteFile`, `Create`, `OpenFile` and `Rename` refuse saving one under a server-script name or into a served folder; `rasp.Chmod` refuses an execute bit; `CommandContext`, `CheckCommand` and `CheckShellCommand` refuse running one (directly, by an interpreter, or in `sh -c`); `rasp.CheckLoad` and `rasp.CheckExtract` cover plugin loads and archive extraction.
 
 Security baseline: once per process, in the background after `Init`, RASP reports risky set-up as `baseline` events (report only, never blocks): `InsecureSkipVerify` on `http.DefaultTransport`, `net/http/pprof` on `http.DefaultServeMux` in production, `GIN_MODE=debug` under a production environment, running as root, an unpinned config key in production, and a Go release line past its end of life. See "Security baseline" in [`sdk/rasp/README.md`](../rasp/README.md).
 

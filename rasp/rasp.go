@@ -60,6 +60,14 @@ type Options struct {
 	// SHIELD360_IAST_SAMPLE_RATE and the signed config's iastSampleRate rank
 	// above it.
 	IastSampleRate float64
+	// Uploads are the local upload options (servedDirs, maxBytes, allow,
+	// deepScan, scanBytes, quarantineDir), used without a signed config
+	// (README "Upload policy and deep scan").
+	Uploads *UploadSettings
+	// AttackAgents are the local AI attack agent settings (README "AI attack
+	// agents"), used without a signed config; nil keeps the defaults. The
+	// LLM tripwire is off unless Tripwire is true.
+	AttackAgents *AttackAgentConfig
 }
 
 // componentsElsewhere is set while the SDK's runtime package report
@@ -183,6 +191,9 @@ func toRemote(c *Claims) *RemoteConfig {
 		Rules:         c.Rules,
 		CustomRules:   c.CustomRules,
 		Deception:     c.Deception,
+		Uploads:       ParseUploadPolicy(c.Uploads),
+		EdgeKeys:      c.EdgeKeys,
+		AttackAgents:  c.AttackAgents,
 	}
 }
 
@@ -265,6 +276,7 @@ func Init(o *Options, ic InitContext) (on bool) {
 		monitorOnly:   unpinned,
 		alwaysAllowed: AlwaysAllowed(ic.URL, ic.OtlpEndpoint),
 		getenv:        getenv,
+		attackAgents:  opts.AttackAgents,
 	})
 	configureIast(iastSettings{
 		enabled:         opts.Iast,
@@ -273,6 +285,8 @@ func Init(o *Options, ic InitContext) (on bool) {
 		environment:     ic.Environment,
 		getenv:          getenv,
 	})
+	setLocalUploads(opts.Uploads)
+	setUploadEnv(ic.URL, ic.APIKey, ic.HTTPClient)
 	if !enabled {
 		return false
 	}
@@ -332,7 +346,11 @@ func Init(o *Options, ic InitContext) (on bool) {
 			CacheDir:      cacheDir,
 			HTTPClient:    ic.HTTPClient,
 			OnConfig: func(c *Claims) {
-				setRemoteConfig(toRemote(c))
+				r := toRemote(c)
+				setRemoteConfig(r)
+				if r != nil && r.Uploads != nil {
+					go testEngines(r.Uploads.DeepScan)
+				}
 				setIastRemote(c)
 			},
 			// Logged once per reason (the client dedupes); trust on first

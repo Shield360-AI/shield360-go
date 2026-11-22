@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"net/http"
 
+	"github.com/ThinkfleetAI/shield360-go/rasp"
 	"github.com/XSAM/otelsql"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
@@ -27,6 +28,9 @@ import (
 // matched.
 func Handler(h http.Handler, operation string) http.Handler {
 	routed := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// SHIELD: request correlation — an incoming request's X-Request-Id on
+		// its server span (rasp/edge_request.go).
+		rasp.TagServerSpan(trace.SpanFromContext(r.Context()), rasp.RequestIDOf(r.Header.Get(rasp.RequestIDHeader)))
 		h.ServeHTTP(w, r)
 		// A ServeMux sets the matched pattern while routing; otelhttp renames the
 		// span from it (spanName below) and this records the route.

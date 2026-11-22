@@ -78,14 +78,23 @@ func Create(ctx context.Context, name string) (*os.File, error) {
 	if err := checkPaths(ctx, "os.Create", pathOp{name, OpWrite}); err != nil {
 		return nil, err
 	}
+	if err := checkBackdoorWrite(ctx, "os.Create", name, "", nil); err != nil {
+		return nil, err
+	}
 	return os.Create(name)
 }
 
 // OpenFile is os.OpenFile with RASP checks; the flag decides whether it is
 // a read, a write or an append.
 func OpenFile(ctx context.Context, name string, flag int, perm os.FileMode) (*os.File, error) {
-	if err := checkPaths(ctx, "os.OpenFile", pathOp{name, openFlagOp(flag)}); err != nil {
+	op := openFlagOp(flag)
+	if err := checkPaths(ctx, "os.OpenFile", pathOp{name, op}); err != nil {
 		return nil, err
+	}
+	if isWriteOp(op) {
+		if err := checkBackdoorWrite(ctx, "os.OpenFile", name, "", nil); err != nil {
+			return nil, err
+		}
 	}
 	return os.OpenFile(name, flag, perm)
 }
@@ -101,6 +110,9 @@ func ReadFile(ctx context.Context, name string) ([]byte, error) {
 // WriteFile is os.WriteFile with RASP checks.
 func WriteFile(ctx context.Context, name string, data []byte, perm os.FileMode) error {
 	if err := checkPaths(ctx, "os.WriteFile", pathOp{name, OpWrite}); err != nil {
+		return err
+	}
+	if err := checkBackdoorWrite(ctx, "os.WriteFile", name, "", data); err != nil {
 		return err
 	}
 	return os.WriteFile(name, data, perm)
@@ -125,6 +137,9 @@ func RemoveAll(ctx context.Context, path string) error {
 // Rename is os.Rename with RASP checks on both paths.
 func Rename(ctx context.Context, oldpath, newpath string) error {
 	if err := checkPaths(ctx, "os.Rename", pathOp{oldpath, OpRename}, pathOp{newpath, OpRename}); err != nil {
+		return err
+	}
+	if err := checkBackdoorWrite(ctx, "os.Rename", newpath, oldpath, nil); err != nil {
 		return err
 	}
 	return os.Rename(oldpath, newpath)

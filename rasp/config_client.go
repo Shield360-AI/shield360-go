@@ -80,6 +80,17 @@ type Claims struct {
 	// IastSampleRate its sampling rate (nil when absent or not a number).
 	Iast           string
 	IastSampleRate *float64
+	// Uploads is the upload policy as sent (README "Upload policy and deep
+	// scan"); nil when absent. ParseUploadPolicy reads it.
+	Uploads json.RawMessage
+	// EdgeKeys are the signed config's edgeContext keys (protection triangle).
+	EdgeKeys []EdgeKey
+	// AttackAgents is the attackAgents block, read (README "AI attack
+	// agents"); nil when absent or not an object.
+	AttackAgents *AttackAgentConfig
+	// Raw is the verified claims as sent (JSON), for documents other than
+	// the RASP config (the Defend policy).
+	Raw []byte
 }
 
 // PinnedKey is an Ed25519 public key a config must verify against.
@@ -203,6 +214,12 @@ func JWSKid(token string) string {
 // failure it returns a reason: malformed, alg, typ, no_key, signature,
 // version, app, expired.
 func VerifyConfigJWS(token string, keys []PinnedKey, app string, now time.Time) (claims *Claims, kid string, reason string) {
+	return VerifyTypedJWS(token, keys, app, now, JWSType)
+}
+
+// VerifyTypedJWS is VerifyConfigJWS for another signed document of the same
+// shape (the Defend policy, typ shield360-defend+jws).
+func VerifyTypedJWS(token string, keys []PinnedKey, app string, now time.Time, typ string) (claims *Claims, kid string, reason string) {
 	defer func() {
 		if recover() != nil {
 			claims, kid, reason = nil, "", "malformed"
@@ -227,7 +244,7 @@ func VerifyConfigJWS(token string, keys []PinnedKey, app string, now time.Time) 
 	if h["alg"] != "EdDSA" {
 		return nil, "", "alg"
 	}
-	if h["typ"] != JWSType {
+	if h["typ"] != typ {
 		return nil, "", "typ"
 	}
 	kid, _ = h["kid"].(string)
@@ -268,6 +285,7 @@ func VerifyConfigJWS(token string, keys []PinnedKey, app string, now time.Time) 
 	if reason != "" {
 		return nil, kid, reason
 	}
+	c.Raw = payload
 	if c.App != app {
 		return nil, kid, "app"
 	}
@@ -365,6 +383,14 @@ func parseClaims(payload []byte) (*Claims, string) {
 		c.CustomRules = custom
 	}
 	c.Deception = ParseDeception(m["deception"])
+	c.EdgeKeys = ParseEdgeKeys(m["edgeContext"])
+	if raw := m["attackAgents"]; len(raw) > 0 && raw[0] == '{' {
+		a := ParseAttackAgents(raw)
+		c.AttackAgents = &a
+	}
+	if u := m["uploads"]; len(u) > 0 && string(u) != "null" {
+		c.Uploads = u
+	}
 	// The TypeScript client also reads a boolean switch and a numeric string
 	// rate.
 	var iast any
@@ -420,6 +446,10 @@ type ConfigClientOptions struct {
 	HTTPClient *http.Client
 	Now        func() time.Time
 	Random     func() float64
+	// Path and JWSType name another signed document of the same shape
+	// (default /api/rasp/config and shield360-rasp+jws).
+	Path    string
+	JWSType string
 }
 
 type cacheFile struct {
@@ -457,6 +487,12 @@ func NewConfigClient(o ConfigClientOptions) *ConfigClient {
 	}
 	if o.HTTPClient == nil {
 		o.HTTPClient = &http.Client{Timeout: fetchTimeout}
+	}
+	if o.Path == "" {
+		o.Path = "/api/rasp/config"
+	}
+	if o.JWSType == "" {
+		o.JWSType = JWSType
 	}
 	return &ConfigClient{o: o, base: strings.TrimRight(o.URL, "/"), warned: map[string]bool{}, stop: make(chan struct{}), done: make(chan struct{})}
 }
@@ -547,7 +583,7 @@ func (c *ConfigClient) LoadCache() (ok bool) {
 	}
 	keys := c.trustedLocked()
 	c.mu.Unlock()
-	claims, _, reason := VerifyConfigJWS(saved.Config, keys, c.o.App, c.o.Now())
+	claims, _, reason := VerifyTypedJWS(saved.Config, keys, c.o.App, c.o.Now(), c.o.JWSType)
 	if reason != "" {
 		return false
 	}
@@ -624,7 +660,7 @@ func (c *ConfigClient) fetchOnce(ctx context.Context) (result PollResult) {
 	ctx, cancel := context.WithTimeout(ctx, fetchTimeout)
 	defer cancel()
 	q := strings.ReplaceAll(url.QueryEscape(c.o.App), "+", "%20")
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base+"/api/rasp/config?app="+q, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base+c.o.Path+"?app="+q, nil)
 	if err != nil {
 		return PollFailed
 	}
@@ -688,7 +724,7 @@ func (c *ConfigClient) fetchOnce(ctx context.Context) (result PollResult) {
 	}
 	keys := c.trustedLocked()
 	c.mu.Unlock()
-	claims, _, reason := VerifyConfigJWS(token, keys, c.o.App, c.o.Now())
+	claims, _, reason := VerifyTypedJWS(token, keys, c.o.App, c.o.Now(), c.o.JWSType)
 	if reason != "" {
 		c.warn(reason)
 		return PollRejected

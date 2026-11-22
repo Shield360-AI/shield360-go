@@ -294,15 +294,22 @@ const (
 // checkDeception runs deception for a request, first thing in the
 // middleware. The client address is request.ip's: the peer address, never
 // X-Forwarded-For. It fails open.
-func checkDeception(ctx context.Context, r *http.Request, framework string) (v deceptionVerdict, blocked *BlockedError) {
+func checkDeception(ctx context.Context, r *http.Request, framework string) (v deceptionVerdict, blocked *BlockedError, page string) {
 	defer func() {
 		if recover() != nil {
-			v, blocked = deceptionPass, nil
+			v, blocked, page = deceptionPass, nil, ""
 		}
 	}()
+	// SHIELD: AI attack agents — the tripwire URL is answered first (README "AI attack agents").
+	if hit, b := checkTripwire(ctx, r, framework); hit {
+		if b != nil {
+			return deceptionBlocked, b, ""
+		}
+		return deceptionNotFound, nil, ""
+	}
 	cfg, mode := deceptionState()
 	if cfg == nil {
-		return deceptionPass, nil
+		return deceptionPass, nil, ""
 	}
 	ip := peerIP(r.RemoteAddr)
 	table := suspiciousTable()
@@ -311,16 +318,17 @@ func checkDeception(ctx context.Context, r *http.Request, framework string) (v d
 	if decoy := matchDecoded(cfg.Paths, r.URL.Path); decoy != "" {
 		table.Mark(ip, time.Duration(cfg.TTLSeconds)*time.Second)
 		reportDeception(ctx, r, deceptionRuleHit, framework, decoy, mode)
-		return deceptionNotFound, nil
+		// SHIELD: AI attack agents — a decoy hit adds to the behavior score; the 404 may carry the tripwire page.
+		return deceptionNotFound, nil, agentsDecoy(ctx, r, framework)
 	}
 	if !table.Suspicious(ip) {
-		return deceptionPass, nil
+		return deceptionPass, nil, ""
 	}
 	path := r.URL.EscapedPath()
 	if b := reportDeception(ctx, r, deceptionRuleSuspicious, framework, EventRouteOf(path), mode); b != nil {
-		return deceptionBlocked, b
+		return deceptionBlocked, b, ""
 	}
-	return deceptionPass, nil
+	return deceptionPass, nil, ""
 }
 
 // reportDeception sends a deception event and returns the block error when

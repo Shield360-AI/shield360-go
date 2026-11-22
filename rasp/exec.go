@@ -56,9 +56,12 @@ func CheckShellCommand(ctx context.Context, command string) error {
 		return nil
 	}
 	rc := FromContext(ctx)
-	return checkSink(ctx, "shell.command", func(slot *iastSlot) *Finding {
+	if err := checkSink(ctx, "shell.command", func(slot *iastSlot) *Finding {
 		return detectShellLine(command, rc.Inputs(), rc.InRequest(), AllowLists().Commands, slot)
-	})
+	}); err != nil {
+		return err
+	}
+	return checkBackdoorShell(ctx, "shell.command", command)
 }
 
 func detectShellLine(command string, inputs []Input, inRequest bool, allow []string, slot *iastSlot) *Finding {
@@ -96,7 +99,11 @@ func checkArgv(ctx context.Context, argv []string, sink string) error {
 		return nil
 	}
 	rc := FromContext(ctx)
-	return checkSink(ctx, sink, func(slot *iastSlot) *Finding {
+	if err := checkSink(ctx, sink, func(slot *iastSlot) *Finding {
 		return detectArgv(argv, rc.Inputs(), rc.InRequest(), AllowLists().Commands, slot)
-	})
+	}); err != nil {
+		return err
+	}
+	// Backdoor checks: a saved upload run as a program or by an interpreter.
+	return checkBackdoorExec(ctx, sink, argv)
 }

@@ -17,16 +17,19 @@ check=0
 
 # Paths relative to sdk/rasp, copied to the same path under $dest.
 files=(
+	testdata/ai-attack-agents.json
 	testdata/attack-examples.json
 	testdata/benign.json
 	testdata/custom-rules.json
 	testdata/deception.json
 	testdata/dnslog-domains.json
 	testdata/iast.json
+	testdata/request-correlation.json
 	testdata/routes.json
 	testdata/sql-lexer.json
 	testdata/targets.json
 	testdata/template-attack-examples.json
+	testdata/triangle.json
 	rules/default-rules.json
 	rules/template-engines.json
 )

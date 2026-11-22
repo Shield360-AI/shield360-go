@@ -40,6 +40,15 @@ type RemoteConfig struct {
 	// Deception is the config's usable deception block (README
 	// "Deception"); nil when off.
 	Deception *DeceptionConfig
+	// Uploads is the parsed upload policy (README "Upload policy and deep
+	// scan"); nil when the config has none.
+	Uploads *UploadPolicy
+	// EdgeKeys are the keys of Edge's context header and the app's verdicts
+	// (protection triangle); empty without Edge.
+	EdgeKeys []EdgeKey
+	// AttackAgents is the signed attackAgents block, read (README "AI attack
+	// agents"); nil keeps the local option.
+	AttackAgents *AttackAgentConfig
 	// deceptionMode is the config's attacks.deception ("" when unset);
 	// setRemoteConfig keeps it apart, as the attack list does not hold it.
 	deceptionMode Mode
@@ -69,6 +78,8 @@ type localSettings struct {
 	mode    Mode
 	attacks map[AttackType]Mode
 	allow   Allow
+	// attackAgents is the local AttackAgents option, read.
+	attackAgents AttackAgentConfig
 }
 
 type engineState struct {
@@ -92,7 +103,7 @@ type engineState struct {
 
 var (
 	stateMu sync.RWMutex
-	state   = engineState{local: localSettings{mode: ModeMonitor}, applicationName: "default"}
+	state   = engineState{local: localSettings{mode: ModeMonitor, attackAgents: DefaultAttackAgents}, applicationName: "default"}
 	// active mirrors isActive for the hot path (one atomic load per sink).
 	active          atomic.Bool
 	runtimeDisabled atomic.Bool
@@ -148,6 +159,8 @@ type engineSettings struct {
 	monitorOnly     bool
 	alwaysAllowed   []string
 	getenv          func(string) string
+	// attackAgents is the local AttackAgents option (nil: the defaults).
+	attackAgents *AttackAgentConfig
 }
 
 func configureEngine(s engineSettings) {
@@ -178,12 +191,26 @@ func configureEngine(s engineSettings) {
 			OutboundHosts: cleanStrings(s.allow.OutboundHosts),
 			FileRoots:     cleanStrings(s.allow.FileRoots),
 		},
+		attackAgents: localAttackAgents(s.attackAgents),
 	}
 	state.alwaysAllowed = append([]string(nil), s.alwaysAllowed...)
 	runtimeDisabled.Store(false)
 	modelOutputOn.Store(state.enabled && s.modelOutput)
 	refreshActiveLocked()
 	stateMu.Unlock()
+}
+
+// localAttackAgents reads the local option the way the signed block is
+// read: a value out of bounds is its default.
+func localAttackAgents(a *AttackAgentConfig) AttackAgentConfig {
+	if a == nil {
+		return DefaultAttackAgents
+	}
+	raw, err := json.Marshal(a)
+	if err != nil {
+		return DefaultAttackAgents
+	}
+	return ParseAttackAgents(raw)
 }
 
 func setEventSink(s eventSink) {
@@ -460,6 +487,22 @@ func safeMethod(m string) string {
 // FindingExtra overrides what the event says about the request.
 type FindingExtra struct {
 	Framework, Route, Method, Path string
+
+	// tightenedByEdge is set by HandleFinding (protection triangle).
+	tightenedByEdge bool
+	// agent is the client kind and reason of an ai_attack_agent event.
+	agent *AttackMark
+}
+
+// edgeKeys are the signed config's keys for Edge's context header and the
+// app's verdicts (protection triangle); nil without Edge.
+func edgeKeys() []EdgeKey {
+	stateMu.RLock()
+	defer stateMu.RUnlock()
+	if state.remote == nil {
+		return nil
+	}
+	return state.remote.EdgeKeys
 }
 
 func newEventID() string {
@@ -515,6 +558,14 @@ func HandleFinding(ctx context.Context, f *Finding, sink string, extra FindingEx
 	}
 	stateMu.RLock()
 	mode := modeForLocked(f.Attack)
+	// An upload route's own mode decides instead, capped by a local off, the
+	// kill switch (Active above) and no pinned key, like attack modes.
+	if f.Mode != "" && state.local.attacks[f.Attack] != ModeOff {
+		mode = f.Mode
+		if mode == ModeBlock && state.monitorOnly {
+			mode = ModeMonitor
+		}
+	}
 	app := state.applicationName
 	remote := state.remote
 	es := state.sink
@@ -530,12 +581,38 @@ func HandleFinding(ctx context.Context, f *Finding, sink string, extra FindingEx
 	if mode == ModeOff {
 		return DecisionNone, nil
 	}
+	// SHIELD: protection triangle — a client Edge already marked (flagged,
+	// deep in a honeypot, high risk) is blocked for injection-class attacks
+	// this app only monitors. A rule's own action still caps it.
+	rc := FromContext(ctx)
+	edge := rc.Edge()
+	stateMu.RLock()
+	onlyMonitor := state.monitorOnly
+	stateMu.RUnlock()
+	tightened := mode == ModeMonitor && f.Action == "" && edgeTighten[f.Attack] && EdgeSaysSuspect(edge) && !onlyMonitor
+	if tightened {
+		mode = ModeBlock
+		extra.tightenedByEdge = true
+	}
 	decision := DecisionMonitored
 	if mode == ModeBlock && !MonitorOnly(f.Attack) {
 		decision = DecisionBlocked
 	}
+	// SHIELD: AI attack agents — a finding feeds the client's behavior
+	// score; a block's 403 is never an auth failure.
+	if rc != nil {
+		rc.mu.Lock()
+		if f.Attack != AIAttackAgent && f.Attack != Deception && f.Attack != Baseline {
+			rc.agentFinding = true
+		}
+		if decision == DecisionBlocked {
+			rc.ownBlock = true
+		}
+		rc.mu.Unlock()
+	}
 	eventID := newEventID()
 	emitEvent(ctx, f, sink, extra, decision, mode, eventID, app, remote, es)
+	sendVerdict(rc, remote, f, decision)
 	// Custom rules that look at built-in findings; the first blocking
 	// decision wins, the built-in one first.
 	var customBlock error
@@ -582,6 +659,34 @@ func check(ctx context.Context, sink string, run func(*iastSlot) *Finding) (d De
 
 // emitEvent sends a finding's event to the sink. Reporting never breaks the
 // call.
+// sendVerdict tells Edge about the detection in a signed response header,
+// for a request that came through Edge (a verified context): block for a
+// blocked attack, flag for a monitored one. Once per request, never panics.
+func sendVerdict(rc *Context, remote *RemoteConfig, f *Finding, decision Decision) {
+	defer func() { _ = recover() }()
+	if rc == nil || remote == nil || len(remote.EdgeKeys) == 0 {
+		return
+	}
+	rc.mu.Lock()
+	edge, set, sent := rc.edge, rc.setHeader, rc.verdictSent
+	rc.mu.Unlock()
+	if edge == nil || set == nil || sent || (f.Attack == CustomRuleAttack && decision != DecisionBlocked) {
+		return
+	}
+	act, ttl := "flag", int64(900)
+	if decision == DecisionBlocked {
+		act, ttl = "block", 3600
+	}
+	v := SignEdgeVerdict(remote.EdgeKeys, edge.Rid, act, string(f.Attack), "rasp", ttl, time.Now().Unix())
+	if v == "" {
+		return
+	}
+	set(EdgeVerdictHeader, v)
+	rc.mu.Lock()
+	rc.verdictSent = true
+	rc.mu.Unlock()
+}
+
 func emitEvent(ctx context.Context, f *Finding, sink string, extra FindingExtra, decision Decision, mode Mode, eventID, app string, remote *RemoteConfig, es eventSink) {
 	defer func() { _ = recover() }()
 	rc := FromContext(ctx)
@@ -624,7 +729,21 @@ func emitEvent(ctx context.Context, f *Finding, sink string, extra FindingExtra,
 	if remote != nil && remote.Snippets && f.Input != nil {
 		attrs["shield360.rasp.snippet"] = MaskSnippet(f.Input.Value)
 	}
+	// SHIELD: protection triangle — the Edge request this happened in (one
+	// correlated event in Shield360), and a tightening.
+	if e := rc.Edge(); e != nil {
+		attrs["shield360.edge.request_id"] = e.Rid
+	}
+	if extra.tightenedByEdge {
+		attrs["shield360.rasp.tightened_by_edge"] = "true"
+	}
 	addTargetAttrs(attrs, f, remote)
+	addUploadAttrs(attrs, f)
+	// SHIELD: AI attack agents — the client kind and the reason it was marked.
+	if extra.agent != nil && f.Attack == AIAttackAgent {
+		attrs["shield360.rasp.client_kind"] = extra.agent.Kind
+		attrs["shield360.rasp.reason"] = extra.agent.Reason
+	}
 	addTraceIDs(attrs, ctx)
 	if es != nil {
 		key := strings.Join([]string{string(f.Attack), f.Rule, sink, route, string(decision)}, "\x00")
