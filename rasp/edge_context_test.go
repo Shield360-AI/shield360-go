@@ -64,6 +64,8 @@ type triangleCorpus struct {
 			Waf  []string `json:"waf"`
 			Tp   string   `json:"tp"`
 			Rt   string   `json:"rt"`
+			Sid  string   `json:"sid"`
+			Fp   string   `json:"fp"`
 		} `json:"expect"`
 	} `json:"context"`
 	Verdict []struct {
@@ -125,7 +127,7 @@ func TestTriangleCorpus(t *testing.T) {
 			continue
 		}
 		e := x.Expect
-		want := &EdgeRequestContext{Rid: e.Rid, Iat: e.Iat, Exp: e.Exp, Method: e.M, PathHash: e.Ph, ClientType: e.Ct, Risk: e.Risk, Trap: e.Trap, Flagged: e.Fl, Waf: e.Waf, Traceparent: e.Tp, RedTeam: e.Rt}
+		want := &EdgeRequestContext{Rid: e.Rid, Iat: e.Iat, Exp: e.Exp, Method: e.M, PathHash: e.Ph, ClientType: e.Ct, Risk: e.Risk, Trap: e.Trap, Flagged: e.Fl, Waf: e.Waf, Traceparent: e.Tp, RedTeam: e.Rt, Session: e.Sid, Fingerprint: e.Fp}
 		if !reflect.DeepEqual(got, want) {
 			t.Errorf("context %q: got %+v, want %+v", x.Name, got, want)
 		}

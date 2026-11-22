@@ -45,9 +45,12 @@ var (
 	edgeB64Re = regexp.MustCompile(`^[A-Za-z0-9_-]*$`)
 
 	edgeClients     = map[string]bool{"human": true, "verified_crawler": true, "verified_agent": true, "automation": true, "suspected_agent": true, "unknown": true}
-	edgeContextKeys = map[string]bool{"rid": true, "iat": true, "exp": true, "m": true, "ph": true, "ct": true, "risk": true, "waf": true, "trap": true, "fl": true, "tp": true, "rt": true}
+	edgeContextKeys = map[string]bool{"rid": true, "iat": true, "exp": true, "m": true, "ph": true, "ct": true, "risk": true, "waf": true, "trap": true, "fl": true, "tp": true, "rt": true, "sid": true, "fp": true}
 	// A red team run id (rt): Edge verified the request's X-Shield360-Red-Team header.
 	edgeRunRe = regexp.MustCompile(`^[a-z0-9]{8,40}$`)
+	// Edge's security session (sid, the s360_sid cookie) and request fingerprint (fp).
+	edgeSidRe = regexp.MustCompile(`^[A-Za-z0-9_-]{22}$`)
+	edgeFpRe  = regexp.MustCompile(`^[0-9a-f]{16}$`)
 )
 
 // EdgeKey is one key of the signed config's edgeContext.
@@ -70,6 +73,11 @@ type EdgeRequestContext struct {
 	// RedTeam is the red team run Edge verified the request belongs to (its
 	// X-Shield360-Red-Team header), else "".
 	RedTeam string
+	// Session is Edge's security session (the s360_sid cookie) and
+	// Fingerprint the request fingerprint, else "" (routes without Edge's
+	// security cookie).
+	Session     string
+	Fingerprint string
 }
 
 // ParseEdgeKeys reads the signed config's edgeContext ({"keys": [{"kid",
@@ -281,12 +289,20 @@ func verifyEdgeContext(keys []EdgeKey, value, method, path, requestID string, no
 	if v, present := c["rt"]; present && (v == nil || !edgeRunRe.MatchString(rt)) {
 		return nil
 	}
+	sid, _ := c["sid"].(string)
+	if _, present := c["sid"]; present && !edgeSidRe.MatchString(sid) {
+		return nil
+	}
+	fp, _ := c["fp"].(string)
+	if _, present := c["fp"]; present && !edgeFpRe.MatchString(fp) {
+		return nil
+	}
 	if cache != nil && !cache.first("c:"+rid, exp+edgeSkew, now) {
 		return nil
 	}
 	fl, _ := c["fl"].(bool)
 	tp, _ := c["tp"].(string)
-	return &EdgeRequestContext{Rid: rid, Iat: iat, Exp: exp, Method: m, PathHash: ph, ClientType: ct, Risk: int(risk), Trap: int(trap), Flagged: fl, Waf: waf, Traceparent: tp, RedTeam: rt}
+	return &EdgeRequestContext{Rid: rid, Iat: iat, Exp: exp, Method: m, PathHash: ph, ClientType: ct, Risk: int(risk), Trap: int(trap), Flagged: fl, Waf: waf, Traceparent: tp, RedTeam: rt, Session: sid, Fingerprint: fp}
 }
 
 // SignEdgeVerdict returns a signed verdict for Edge with the current (first)
