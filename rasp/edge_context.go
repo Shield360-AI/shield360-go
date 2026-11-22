@@ -45,12 +45,15 @@ var (
 	edgeB64Re = regexp.MustCompile(`^[A-Za-z0-9_-]*$`)
 
 	edgeClients     = map[string]bool{"human": true, "verified_crawler": true, "verified_agent": true, "automation": true, "suspected_agent": true, "unknown": true}
-	edgeContextKeys = map[string]bool{"rid": true, "iat": true, "exp": true, "m": true, "ph": true, "ct": true, "risk": true, "waf": true, "trap": true, "fl": true, "tp": true, "rt": true, "sid": true, "fp": true}
+	edgeContextKeys = map[string]bool{"rid": true, "iat": true, "exp": true, "m": true, "ph": true, "ct": true, "risk": true, "waf": true, "trap": true, "fl": true, "tp": true, "rt": true, "sid": true, "fp": true, "dk": true, "dt": true}
 	// A red team run id (rt): Edge verified the request's X-Shield360-Red-Team header.
 	edgeRunRe = regexp.MustCompile(`^[a-z0-9]{8,40}$`)
 	// Edge's security session (sid, the s360_sid cookie) and request fingerprint (fp).
 	edgeSidRe = regexp.MustCompile(`^[A-Za-z0-9_-]{22}$`)
 	edgeFpRe  = regexp.MustCompile(`^[0-9a-f]{16}$`)
+	// Edge's trusted device key (dk, its id) and trust level (dt).
+	edgeDkRe     = regexp.MustCompile(`^[A-Za-z0-9_-]{8,64}$`)
+	edgeDtValues = map[string]bool{"software": true, "hardware": true, "attested": true}
 )
 
 // EdgeKey is one key of the signed config's edgeContext.
@@ -78,6 +81,11 @@ type EdgeRequestContext struct {
 	// security cookie).
 	Session     string
 	Fingerprint string
+	// DeviceKey is the trusted device key Edge verified the request comes
+	// from and DeviceTrust its trust level (software, hardware, attested),
+	// else "" (routes without trusted devices, or no verified device).
+	DeviceKey   string
+	DeviceTrust string
 }
 
 // ParseEdgeKeys reads the signed config's edgeContext ({"keys": [{"kid",
@@ -297,12 +305,20 @@ func verifyEdgeContext(keys []EdgeKey, value, method, path, requestID string, no
 	if _, present := c["fp"]; present && !edgeFpRe.MatchString(fp) {
 		return nil
 	}
+	dk, _ := c["dk"].(string)
+	if _, present := c["dk"]; present && !edgeDkRe.MatchString(dk) {
+		return nil
+	}
+	dt, _ := c["dt"].(string)
+	if _, present := c["dt"]; present && !edgeDtValues[dt] {
+		return nil
+	}
 	if cache != nil && !cache.first("c:"+rid, exp+edgeSkew, now) {
 		return nil
 	}
 	fl, _ := c["fl"].(bool)
 	tp, _ := c["tp"].(string)
-	return &EdgeRequestContext{Rid: rid, Iat: iat, Exp: exp, Method: m, PathHash: ph, ClientType: ct, Risk: int(risk), Trap: int(trap), Flagged: fl, Waf: waf, Traceparent: tp, RedTeam: rt, Session: sid, Fingerprint: fp}
+	return &EdgeRequestContext{Rid: rid, Iat: iat, Exp: exp, Method: m, PathHash: ph, ClientType: ct, Risk: int(risk), Trap: int(trap), Flagged: fl, Waf: waf, Traceparent: tp, RedTeam: rt, Session: sid, Fingerprint: fp, DeviceKey: dk, DeviceTrust: dt}
 }
 
 // SignEdgeVerdict returns a signed verdict for Edge with the current (first)
