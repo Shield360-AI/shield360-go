@@ -85,6 +85,8 @@ type Facts struct {
 	Headers map[string]string
 	Content []string
 	Edge    *clienttype.EdgeSignal
+	// edge is Edge's verified context itself (SHIELD: decoy and trap verdicts).
+	edge *rasp.EdgeRequestContext
 }
 
 func cut(s string, max int) string {

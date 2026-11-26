@@ -53,6 +53,9 @@ type Result struct {
 	Decoy *Decoy
 	// CrumbHeader is the X-Debug-Trace value to add to an allowed response.
 	CrumbHeader string
+	// Verdict is the signed X-Shield360-Verdict a trap hit sends Edge, for
+	// the response (SHIELD: decoy and trap verdicts); "" for none.
+	Verdict string
 }
 
 func newResult(d Verdict, reasons, ruleIDs []string, ttl int) Result {

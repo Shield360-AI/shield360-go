@@ -524,6 +524,12 @@ func (d *Defend) honeypotStep(hp *Honeypots, p *Policy, f *Facts, mode Mode, r R
 	}
 	r.Reasons = append(r.Reasons, reasons...)
 	r.ClientType = clienttype.SuspectedAIAgent
+	// SHIELD: decoy and trap verdicts — Edge blocks the client fleet-wide when this hit blocks, else marks it.
+	act := "flag"
+	if action == "block" && mode != Monitor {
+		act = "block"
+	}
+	r.Verdict = rasp.HitVerdict(p.EdgeKeys, f.edge, ip, act, "trap", "defend", int64(ttl), d.o.Now().Unix())
 	// A decoy keeps answering with fake data (the client learns nothing); a
 	// fake credential on a real route is refused now when the mode blocks.
 	if decoy != nil {
@@ -542,6 +548,7 @@ func (d *Defend) honeypotStep(hp *Honeypots, p *Policy, f *Facts, mode Mode, r R
 	}
 	out := newResult(verdict, r.Reasons, r.RuleIDs, ttl)
 	out.ClientType = r.ClientType
+	out.Verdict = r.Verdict
 	return out
 }
 
@@ -604,6 +611,7 @@ func (d *Defend) decide(req Request, call Call, mode Mode) (Result, Facts) {
 			rid := f.Headers[strings.ToLower(rasp.RequestIDHeader)]
 			if e := rasp.VerifyEdgeContextAt(cur.p.EdgeKeys, v, f.Method, f.RawPath, rid, int64(math.Floor(nowMs/1000)), d.replay); e != nil {
 				f.Edge = &clienttype.EdgeSignal{ClientType: e.ClientType, Trap: e.Trap, Flagged: e.Flagged, Risk: e.Risk}
+				f.edge = e
 			}
 		}
 	}
@@ -656,17 +664,25 @@ func ResponseFor(r Result) *Response {
 		if r.Decoy == nil {
 			return nil
 		}
-		return &Response{Status: r.Decoy.Status, Headers: [][2]string{{"Content-Type", r.Decoy.ContentType}, {"Cache-Control", "no-store"}}, Body: r.Decoy.Body}
+		return withVerdict(&Response{Status: r.Decoy.Status, Headers: [][2]string{{"Content-Type", r.Decoy.ContentType}, {"Cache-Control", "no-store"}}, Body: r.Decoy.Body}, r)
 	}
 	status := http.StatusForbidden
 	if r.Decision == RequireSignIn {
 		status = http.StatusUnauthorized
 	}
-	return &Response{
+	return withVerdict(&Response{
 		Status:  status,
 		Headers: [][2]string{{"Content-Type", "application/json"}, {"Shield360-Defend", string(r.Decision)}, {"Cache-Control", "no-store"}},
 		Body:    BlockBody,
+	}, r)
+}
+
+// withVerdict adds a trap hit's verdict to Defend's own answer (SHIELD: decoy and trap verdicts).
+func withVerdict(resp *Response, r Result) *Response {
+	if r.Verdict != "" {
+		resp.Headers = append(resp.Headers, [2]string{rasp.EdgeVerdictHeader, r.Verdict})
 	}
+	return resp
 }
 
 func validTrap(s string) bool {

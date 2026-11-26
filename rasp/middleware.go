@@ -142,8 +142,12 @@ func Middleware(next http.Handler) http.Handler {
 		}
 		// Deception first: a decoy never reaches the handler and gets the
 		// standard library's not-found answer (README "Deception").
-		switch v, b, page := checkDeception(r.Context(), r, Framework); v {
+		switch v, b, page, verdict := checkDeception(r.Context(), r, Framework); v {
 		case deceptionNotFound:
+			// SHIELD: decoy and trap verdicts — the signed verdict rides on the 404 (headers are still open here).
+			if verdict != "" {
+				w.Header().Set(EdgeVerdictHeader, verdict)
+			}
 			// SHIELD: AI attack agents — the decoy 404 may carry the LLM tripwire page.
 			if page != "" {
 				writeTripwirePage(w, r, page)

@@ -3,6 +3,8 @@ package defend
 import (
 	"context"
 	"net/http"
+
+	"github.com/Shield360-AI/shield360-go/rasp"
 )
 
 // net/http middleware: each request is decided before the handler. A denied
@@ -61,6 +63,10 @@ func (d *Defend) MiddlewareWith(o MiddlewareOptions, next http.Handler) http.Han
 		}
 		if res.CrumbHeader != "" {
 			w.Header().Set("X-Debug-Trace", res.CrumbHeader)
+		}
+		// SHIELD: decoy and trap verdicts — a monitored trap hit flags the client at Edge; RASP behind may replace it.
+		if res.Verdict != "" {
+			w.Header().Set(rasp.EdgeVerdictHeader, res.Verdict)
 		}
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), resultKey{}, res)))
 	})

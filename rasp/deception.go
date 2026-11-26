@@ -294,22 +294,22 @@ const (
 // checkDeception runs deception for a request, first thing in the
 // middleware. The client address is request.ip's: the peer address, never
 // X-Forwarded-For. It fails open.
-func checkDeception(ctx context.Context, r *http.Request, framework string) (v deceptionVerdict, blocked *BlockedError, page string) {
+func checkDeception(ctx context.Context, r *http.Request, framework string) (v deceptionVerdict, blocked *BlockedError, page, verdict string) {
 	defer func() {
 		if recover() != nil {
-			v, blocked, page = deceptionPass, nil, ""
+			v, blocked, page, verdict = deceptionPass, nil, "", ""
 		}
 	}()
 	// SHIELD: AI attack agents — the tripwire URL is answered first (README "AI attack agents").
 	if hit, b := checkTripwire(ctx, r, framework); hit {
 		if b != nil {
-			return deceptionBlocked, b, ""
+			return deceptionBlocked, b, "", ""
 		}
-		return deceptionNotFound, nil, ""
+		return deceptionNotFound, nil, "", ""
 	}
 	cfg, mode := deceptionState()
 	if cfg == nil {
-		return deceptionPass, nil, ""
+		return deceptionPass, nil, "", ""
 	}
 	ip := peerIP(r.RemoteAddr)
 	table := suspiciousTable()
@@ -319,16 +319,36 @@ func checkDeception(ctx context.Context, r *http.Request, framework string) (v d
 		table.Mark(ip, time.Duration(cfg.TTLSeconds)*time.Second)
 		reportDeception(ctx, r, deceptionRuleHit, framework, decoy, mode)
 		// SHIELD: AI attack agents — a decoy hit adds to the behavior score; the 404 may carry the tripwire page.
-		return deceptionNotFound, nil, agentsDecoy(ctx, r, framework)
+		// SHIELD: decoy and trap verdicts — behind Edge, the 404 tells every Edge to block (or mark) the client.
+		return deceptionNotFound, nil, agentsDecoy(ctx, r, framework), decoyVerdict(r, ip, mode == ModeBlock, cfg.TTLSeconds)
 	}
 	if !table.Suspicious(ip) {
-		return deceptionPass, nil, ""
+		return deceptionPass, nil, "", ""
 	}
 	path := r.URL.EscapedPath()
 	if b := reportDeception(ctx, r, deceptionRuleSuspicious, framework, EventRouteOf(path), mode); b != nil {
-		return deceptionBlocked, b, ""
+		return deceptionBlocked, b, "", ""
 	}
-	return deceptionPass, nil, ""
+	return deceptionPass, nil, "", ""
+}
+
+// decoyVerdict is the verdict a decoy hit sends Edge (README "Deception",
+// "Protection triangle"): block when the decision is blocked, else flag, for
+// the deception TTL. Edge's context is verified without a replay cache (the
+// request never reaches the handler). "" without one.
+func decoyVerdict(r *http.Request, ip string, block bool, ttl int) string {
+	v := r.Header.Get(EdgeContextHeader)
+	keys := edgeKeys()
+	if v == "" || len(keys) == 0 {
+		return ""
+	}
+	now := time.Now().Unix()
+	e := verifyEdgeContext(keys, v, r.Method, r.URL.EscapedPath(), r.Header.Get(RequestIDHeader), now, nil)
+	act := "flag"
+	if block {
+		act = "block"
+	}
+	return HitVerdict(keys, e, ip, act, "deception", "rasp", int64(ttl), now)
 }
 
 // reportDeception sends a deception event and returns the block error when

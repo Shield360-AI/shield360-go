@@ -346,3 +346,21 @@ var edgeTighten = map[AttackType]bool{
 	"sql_injection": true, "nosql_injection": true, "command_injection": true, "shell_spawn": true, "code_injection": true,
 	"path_traversal": true, "ssrf": true, "deserialization": true, "xxe": true,
 }
+
+// SimulatedClient is the reserved test identity Edge's simulated hits use
+// (TEST-NET-1): never named in a verdict (SHIELD: decoy and trap verdicts).
+const SimulatedClient = "192.0.2.1"
+
+// HitVerdict is the signed verdict a decoy or trap hit sends Edge
+// (edge-deception-spec "What each layer does"), for a request Edge's
+// verified context e names: "" without a context, for a verified crawler or
+// agent, a red team run (rt) or the simulated client.
+func HitVerdict(keys []EdgeKey, e *EdgeRequestContext, ip, act, cat, src string, ttl, iat int64) string {
+	if e == nil || len(keys) == 0 || e.ClientType == "verified_crawler" || e.ClientType == "verified_agent" || e.RedTeam != "" {
+		return ""
+	}
+	if strings.TrimPrefix(ip, "::ffff:") == SimulatedClient {
+		return ""
+	}
+	return SignEdgeVerdict(keys, e.Rid, act, cat, src, ttl, iat)
+}
