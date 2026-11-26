@@ -524,12 +524,8 @@ func (d *Defend) honeypotStep(hp *Honeypots, p *Policy, f *Facts, mode Mode, r R
 	}
 	r.Reasons = append(r.Reasons, reasons...)
 	r.ClientType = clienttype.SuspectedAIAgent
-	// SHIELD: decoy and trap verdicts — Edge blocks the client fleet-wide when this hit blocks, else marks it.
-	act := "flag"
-	if action == "block" && mode != Monitor {
-		act = "block"
-	}
-	r.Verdict = rasp.HitVerdict(p.EdgeKeys, f.edge, ip, act, "trap", "defend", int64(ttl), d.o.Now().Unix())
+	// SHIELD: decoy and trap verdicts — a trap hit always blocks the client fleet-wide at Edge, whatever the local action or mode.
+	r.Verdict = rasp.HitVerdict(p.EdgeKeys, f.edge, ip, "block", "trap", "defend", int64(ttl), d.o.Now().Unix())
 	// A decoy keeps answering with fake data (the client learns nothing); a
 	// fake credential on a real route is refused now when the mode blocks.
 	if decoy != nil {

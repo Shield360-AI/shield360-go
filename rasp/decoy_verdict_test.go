@@ -58,10 +58,14 @@ func TestDecoyHitSendsAVerdict(t *testing.T) {
 		}
 	})
 
-	t.Run("monitored hit flags", func(t *testing.T) {
+	t.Run("monitored hit still blocks at Edge; the app still answers its 404", func(t *testing.T) {
 		deceptionSetup(t, engineSettings{}, `{"paths":["/wp-admin"],"action":"monitor","ttlSeconds":900}`, keys)
 		r, _ := decoyRequest("/wp-admin", "203.0.113.6", map[string]any{})
-		if p := verdictPayload(t, serve(r).Header().Get(EdgeVerdictHeader)); !strings.Contains(p, `"act":"flag"`) || !strings.Contains(p, `"ttl":900`) {
+		rec := serve(r)
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("status %d", rec.Code)
+		}
+		if p := verdictPayload(t, rec.Header().Get(EdgeVerdictHeader)); !strings.Contains(p, `"act":"block"`) || !strings.Contains(p, `"cat":"deception"`) || !strings.Contains(p, `"ttl":900`) {
 			t.Fatalf("verdict %s", p)
 		}
 	})

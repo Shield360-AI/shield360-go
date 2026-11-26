@@ -319,8 +319,8 @@ func checkDeception(ctx context.Context, r *http.Request, framework string) (v d
 		table.Mark(ip, time.Duration(cfg.TTLSeconds)*time.Second)
 		reportDeception(ctx, r, deceptionRuleHit, framework, decoy, mode)
 		// SHIELD: AI attack agents — a decoy hit adds to the behavior score; the 404 may carry the tripwire page.
-		// SHIELD: decoy and trap verdicts — behind Edge, the 404 tells every Edge to block (or mark) the client.
-		return deceptionNotFound, nil, agentsDecoy(ctx, r, framework), decoyVerdict(r, ip, mode == ModeBlock, cfg.TTLSeconds)
+		// SHIELD: decoy and trap verdicts — behind Edge, the 404 tells every Edge to block the client, in monitor too.
+		return deceptionNotFound, nil, agentsDecoy(ctx, r, framework), decoyVerdict(r, ip, cfg.TTLSeconds)
 	}
 	if !table.Suspicious(ip) {
 		return deceptionPass, nil, "", ""
@@ -333,10 +333,11 @@ func checkDeception(ctx context.Context, r *http.Request, framework string) (v d
 }
 
 // decoyVerdict is the verdict a decoy hit sends Edge (README "Deception",
-// "Protection triangle"): block when the decision is blocked, else flag, for
-// the deception TTL. Edge's context is verified without a replay cache (the
-// request never reaches the handler). "" without one.
-func decoyVerdict(r *http.Request, ip string, block bool, ttl int) string {
+// "Protection triangle"): always block, whatever the app's own action (its
+// answer to the request is unchanged), for the deception TTL. Edge's context
+// is verified without a replay cache (the request never reaches the handler).
+// "" without one.
+func decoyVerdict(r *http.Request, ip string, ttl int) string {
 	v := r.Header.Get(EdgeContextHeader)
 	keys := edgeKeys()
 	if v == "" || len(keys) == 0 {
@@ -344,11 +345,7 @@ func decoyVerdict(r *http.Request, ip string, block bool, ttl int) string {
 	}
 	now := time.Now().Unix()
 	e := verifyEdgeContext(keys, v, r.Method, r.URL.EscapedPath(), r.Header.Get(RequestIDHeader), now, nil)
-	act := "flag"
-	if block {
-		act = "block"
-	}
-	return HitVerdict(keys, e, ip, act, "deception", "rasp", int64(ttl), now)
+	return HitVerdict(keys, e, ip, "block", "deception", "rasp", int64(ttl), now)
 }
 
 // reportDeception sends a deception event and returns the block error when

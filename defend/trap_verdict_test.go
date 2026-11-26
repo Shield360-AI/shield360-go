@@ -85,20 +85,34 @@ func TestTrapHitBehindEdgeSendsABlockVerdict(t *testing.T) {
 	}
 }
 
-func TestTrapHitInMonitorFlagsThroughTheMiddleware(t *testing.T) {
-	s := newSetup(t, trapPolicy("block"), func(o *Options) { o.Mode = Monitor })
-	ip := "198.51.100.40"
-	path := s.d.Crumbs(req(ip, "GET", "/", browser...), Call{}).Path
-	r := httptest.NewRequest(http.MethodGet, path, nil)
-	r.RemoteAddr = ip + ":1234"
-	for i := 0; i+1 < len(browser); i += 2 {
-		r.Header.Set(browser[i], browser[i+1])
-	}
-	r.Header.Set("X-Shield360-Edge-Context", trapCtx(path, "req_trap_000010", map[string]any{}))
-	r.Header.Set("X-Request-Id", "req_trap_000010")
-	rec := httptest.NewRecorder()
-	s.d.Middleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("app")) })).ServeHTTP(rec, r)
-	if p := trapVerdictPayload(t, rec.Header().Get(rasp.EdgeVerdictHeader)); !strings.Contains(p, `"act":"flag"`) || !strings.Contains(p, `"cat":"trap"`) {
-		t.Fatalf("verdict %s", p)
+func TestTrapHitInMonitorStillBlocksAtEdgeThroughTheMiddleware(t *testing.T) {
+	for _, c := range []struct {
+		name   string
+		policy string
+		opt    func(*Options)
+	}{
+		{"monitor mode", trapPolicy("block"), func(o *Options) { o.Mode = Monitor }},
+		{"honeypots in monitor", trapPolicy("monitor"), nil},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			s := newSetup(t, c.policy, c.opt)
+			ip := "198.51.100.40"
+			path := s.d.Crumbs(req(ip, "GET", "/", browser...), Call{}).Path
+			r := httptest.NewRequest(http.MethodGet, path, nil)
+			r.RemoteAddr = ip + ":1234"
+			for i := 0; i+1 < len(browser); i += 2 {
+				r.Header.Set(browser[i], browser[i+1])
+			}
+			r.Header.Set("X-Shield360-Edge-Context", trapCtx(path, "req_trap_000010", map[string]any{}))
+			r.Header.Set("X-Request-Id", "req_trap_000010")
+			rec := httptest.NewRecorder()
+			s.d.Middleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("app")) })).ServeHTTP(rec, r)
+			if rec.Code == http.StatusForbidden {
+				t.Fatalf("monitor denied the request locally: %d", rec.Code)
+			}
+			if p := trapVerdictPayload(t, rec.Header().Get(rasp.EdgeVerdictHeader)); !strings.Contains(p, `"act":"block"`) || !strings.Contains(p, `"cat":"trap"`) || !strings.Contains(p, `"src":"defend"`) {
+				t.Fatalf("verdict %s", p)
+			}
+		})
 	}
 }
