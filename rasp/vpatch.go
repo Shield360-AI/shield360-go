@@ -205,7 +205,9 @@ func leadingInt(s string) int {
 	n := 0
 	for i := 0; i < len(s) && isDigitByte(s[i]); i++ {
 		n = n*10 + int(s[i]-'0')
-		if n > 1<<40 {
+		// Stop well inside a 32-bit int, so 386 and arm builds compile and
+		// never overflow; no version part is anywhere near a billion.
+		if n > 1<<30 {
 			break
 		}
 	}
